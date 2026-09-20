@@ -134,6 +134,82 @@ Ajouté en cours de session, à la suite de l'Objectif B (architecture globale).
 
 ---
 
+## Objectif E — Détailler le schéma comptes + salons
+Ajouté en cours de session, avant de poser le squelette de l'add-on.
+
+**Décisions prises :**
+- **Pas de persistance du chat en V1** — les messages sont relayés en
+  direct via Socket.IO et ne sont pas stockés en base. Plus simple, et
+  cohérent avec l'usage (une conversation en direct pendant le
+  visionnage, pas un historique à consulter plus tard). Revisitable si
+  le besoin apparaît.
+- **Code de salon** à 6 caractères alphanumériques (façon Scener), pas
+  d'UUID exposé à l'utilisateur.
+- **Token de session opaque** (pas de JWT) stocké dans une table
+  `sessions`, envoyé en `Authorization: Bearer <token>` pour l'API HTTP
+  et via `socket.handshake.auth.token` pour la connexion Socket.IO —
+  suffisant à cette échelle (pas besoin du stateless-ness d'un JWT pour
+  2 utilisateurs).
+
+**Schéma SQLite (`node:sqlite`) :**
+
+```sql
+CREATE TABLE users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE sessions (
+  token      TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+
+CREATE TABLE rooms (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  code       TEXT NOT NULL UNIQUE,       -- code à 6 caractères, partagé pour rejoindre
+  owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  video_url  TEXT,
+  position   REAL NOT NULL DEFAULT 0,    -- secondes
+  paused     INTEGER NOT NULL DEFAULT 1, -- 0/1
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE room_members (
+  room_id   INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (room_id, user_id)
+);
+```
+
+`room_members` permet à chacun de retrouver "mes salons" plus tard,
+sans dépendre uniquement des connexions Socket.IO en cours (qui sont
+éphémères par nature).
+
+**statut :** terminé — schéma repris tel quel dans `ourmovie/src/db/schema.sql`
+
+---
+
+## Objectif F — Poser le squelette de l'add-on
+Ajouté en cours de session.
+
+- [x] Structure de dossiers add-on HA (`repository.yaml` à la racine du repo + dossier `ourmovie/` pour l'add-on lui-même, pour ne pas mélanger avec les docs de planification)
+- [x] `config.yaml` (métadonnées add-on, Ingress activé, arch amd64/aarch64)
+- [x] `Dockerfile` multi-stage (build TypeScript → image runtime légère, basée sur `node:24-alpine` pour avoir `node:sqlite` en RC sans flag)
+- [x] `package.json` / `tsconfig.json`
+- [x] Squelette backend fonctionnel : DB (schéma + init), auth (register/login), salons (create/get), relais Socket.IO (protocole `join`/`state`/`play`/`pause`/`seek`/`chat` + anti-dérive toutes les 3s)
+- [x] Vérifié : `npm install` + compilation TypeScript passent localement (Node v24.11.1 disponible)
+
+**statut :** terminé — squelette initial commité, reste à écrire le frontend (hors scope aujourd'hui) et affiner l'auth/erreurs
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
 - Squelette de code de l'add-on (Dockerfile, config.yaml réels) — reporté à une session future, une fois l'architecture actée
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée

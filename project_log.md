@@ -31,3 +31,4 @@ supprimées.
 | 4 | Accès de la copine à l'add-on | **Comptes utilisateurs propres à l'app (pas des comptes HA), add-on exposé publiquement via Cloudflare Tunnel.** Voir `discrepancies.md` § Accès de la copine à l'add-on (Resolved) pour les implications d'architecture. |
 | 5 | Nom du projet et remote Git | **Ourmovie** — remote `github.com/KingjulianB/Ourmovie`, repo local initialisé et premier commit poussé le 2026-09-20. |
 | 6 | Stack backend | **Node.js + TypeScript, Fastify + Socket.IO, SQLite via `node:sqlite`, bcryptjs.** Voir `day1_objectives.md` Objectif D pour le détail et les raisons (notamment : évite la compilation native multi-arch pour l'add-on HA). |
+| 7 | Schéma comptes/salons + squelette add-on | Tables `users`/`sessions`/`rooms`/`room_members` (pas de persistance du chat en V1), squelette Fastify + Socket.IO fonctionnel dans `ourmovie/` — testé localement (register/login/room/socket.io tous vérifiés). Voir `day1_objectives.md` Objectifs E et F. |
