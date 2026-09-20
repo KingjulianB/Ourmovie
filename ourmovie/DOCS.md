@@ -27,10 +27,10 @@ séparément avec ton propre compte/domaine Cloudflare) pointant vers le
 port `8099` de cet add-on. Voir le dépôt du projet pour le détail de
 cette décision d'architecture.
 
-En attendant cette configuration, le port `8099` est aussi exposé
-directement sur le réseau local (`http://<ip-ha>:8099`), en secours si
-l'accès via l'Ingress a un souci (des problèmes de fiabilité WebSocket
-à travers l'Ingress ont été rapportés par la communauté HA).
+*(Une précédente version exposait aussi le port 8099 directement sur le
+réseau local en secours ; retiré en 0.2.1 suite à un conflit de port
+avec d'autres add-ons — voir `CHANGELOG.md`. L'accès se fait uniquement
+via l'Ingress pour l'instant.)*
 
 ## Limitations connues de la V1
 

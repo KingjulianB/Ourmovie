@@ -1,5 +1,12 @@
 # Changelog — Ourmovie
 
+## 0.2.1 (2026-09-20)
+
+- Correction : retrait du mapping de port direct `8099` (conflit avec
+  un autre add-on/service utilisant déjà ce port sur certaines
+  installations). L'accès se fait uniquement via l'Ingress HA
+  désormais.
+
 ## 0.2.0 (2026-09-20)
 
 - Frontend V1 : connexion/inscription, création/rejoint de salon,
