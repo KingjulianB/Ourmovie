@@ -88,6 +88,52 @@ Décider ce qui doit marcher en premier.
 
 ---
 
+## Objectif D — Choisir la stack backend
+Ajouté en cours de session, à la suite de l'Objectif B (architecture globale).
+
+**Décision : Node.js + TypeScript.**
+
+- **Serveur HTTP + WebSocket :** Fastify (API HTTP légère — login, gestion
+  des salons) + **Socket.IO** pour le relais de sync + chat. Socket.IO
+  est choisi plutôt qu'un WebSocket brut (`ws`) car son concept de
+  "room" correspond exactement à nos salons, et il gère nativement la
+  reconnexion/heartbeat — moins de code maison à écrire et maintenir
+  pour ça. C'est aussi le choix fait par watchparty (nkc-137), la
+  référence la plus proche trouvée en Objectif A.
+- **Base de données :** SQLite via **`node:sqlite`** (module intégré au
+  runtime Node depuis la v22, passé en *release candidate* dans Node
+  24.15/25.7 début 2026). Choisi plutôt que `better-sqlite3` (le choix
+  le plus populaire habituellement) pour une raison spécifique aux
+  add-ons HA : `better-sqlite3` est un module natif qui doit être
+  recompilé pour chaque architecture cible (amd64, aarch64...), ce qui
+  complique le Dockerfile multi-arch. `node:sqlite` étant intégré au
+  runtime, ce problème disparaît entièrement.
+  **Risque mineur à surveiller :** `node:sqlite` est en RC, pas encore
+  stable à 100% — si son API pose problème en pratique, `better-sqlite3`
+  reste le filet de sécurité (au prix de la complexité multi-arch).
+- **Auth :** `bcryptjs` (implémentation pure JS, pas de compilation
+  native — même raison que ci-dessus) pour le hash des mots de passe,
+  + tokens de session simples stockés en DB. Pas besoin d'OAuth/identité
+  tierce pour un usage à 2 personnes.
+- **Frontend V1 :** servi en fichiers statiques par ce même backend
+  (un seul conteneur, un seul déploiement).
+- **Pourquoi TypeScript de bout en bout :** le backend, le frontend et
+  la future extension navigateur (V2, forcément en JS/TS — c'est la
+  contrainte des extensions Manifest V3) peuvent partager les mêmes
+  types pour le protocole WebSocket déjà esquissé (Objectif B :
+  `join`/`state`/`play`/`pause`/`seek`/`chat`) — un seul langage à
+  maintenir sur tout le projet, et moins de bugs de dérive de protocole
+  entre composants.
+
+**Sources :**
+- [node:sqlite — Node.js v26 Documentation](https://nodejs.org/api/sqlite.html)
+- [Home Assistant docker-base — multi-arch images](https://github.com/home-assistant/docker-base)
+- [watchparty (nkc-137) — Node.js + TypeScript + Socket.IO](https://github.com/nkc-137/watchparty)
+
+**statut :** terminé
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
 - Squelette de code de l'add-on (Dockerfile, config.yaml réels) — reporté à une session future, une fois l'architecture actée
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée
@@ -110,7 +156,7 @@ découvertes et tranchées en route (extension navigateur obligatoire
 pour Netflix ; Ingress HA insuffisante pour un invité externe).
 
 **Notes pour la prochaine session — reprendre dans cet ordre :**
-1. Décider si on initialise un dépôt Git (`project_log.md` décision #1, seule décision encore ouverte)
-2. Poser le squelette réel de l'add-on (Dockerfile, config.yaml, structure de dossiers) — explicitement hors scope du jour 1
+1. ~~Décider si on initialise un dépôt Git~~ — fait (repo local + remote `Ourmovie` + premier commit poussé, 2026-09-20)
+2. ~~Choisir la stack backend~~ — fait (Node.js/TS + Fastify + Socket.IO + `node:sqlite`, voir Objectif D)
 3. Détailler le schéma de comptes utilisateurs + salons (tables SQLite) avant de coder le backend
-4. Choisir la stack backend concrète (langage/framework) — pas encore tranché, à faire avant le squelette
+4. Poser le squelette réel de l'add-on (Dockerfile, config.yaml, structure de dossiers)

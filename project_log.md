@@ -30,3 +30,4 @@ supprimées.
 | 3 | Périmètre MVP retenu | **V1 = liens vidéo directs (mp4/HLS/YouTube) + chat texte, sans extension navigateur. V2 = Netflix + autres plateformes DRM (extension navigateur MV3) + chat audio (WebRTC).** |
 | 4 | Accès de la copine à l'add-on | **Comptes utilisateurs propres à l'app (pas des comptes HA), add-on exposé publiquement via Cloudflare Tunnel.** Voir `discrepancies.md` § Accès de la copine à l'add-on (Resolved) pour les implications d'architecture. |
 | 5 | Nom du projet et remote Git | **Ourmovie** — remote `github.com/KingjulianB/Ourmovie`, repo local initialisé et premier commit poussé le 2026-09-20. |
+| 6 | Stack backend | **Node.js + TypeScript, Fastify + Socket.IO, SQLite via `node:sqlite`, bcryptjs.** Voir `day1_objectives.md` Objectif D pour le détail et les raisons (notamment : évite la compilation native multi-arch pour l'add-on HA). |
