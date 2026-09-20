@@ -230,9 +230,45 @@ Ajouté en cours de session — le rythme du jour a permis de dépasser le simpl
 
 ---
 
+## Objectif H — Prêt à installer aujourd'hui (version, icône, docs)
+Demandé explicitement en fin de session : "je veux que l'app marche dès
+aujourd'hui, met à jour la version sur github pour que HA détecte la
+mise à jour, créer un logo".
+
+- [x] `config.yaml` : version bump `0.1.0` → `0.2.0` (pour que le
+  Supervisor HA détecte une mise à jour disponible)
+- [x] `arch` étendu à `amd64` / `aarch64` / `armv7` — couvre la quasi
+  totalité des installations HA courantes (générique x86, Pi 4/5 en
+  64 bits, Pi plus ancien en 32 bits) sans avoir besoin de demander le
+  matériel exact
+- [x] Port `8099` exposé directement en plus de l'Ingress — accès de
+  secours fiable en local le temps de confirmer si le souci WebSocket
+  via l'Ingress (cf. `discrepancies.md`) se manifeste en pratique
+- [x] `icon.png` (128×128) et `logo.png` (250×100) générés avec PIL
+  (script jetable, supprimé après usage) — motif triangle "play" +
+  bulle de chat, dégradé violet/indigo
+- [x] `README.md`, `DOCS.md`, `CHANGELOG.md` — nécessaires pour un
+  affichage correct dans le store d'add-ons HA (aperçu, documentation,
+  historique de versions)
+- [x] Rebuild final vérifié (compilation propre) après tous ces
+  changements
+
+**Pour que ça marche vraiment aujourd'hui, il reste à faire côté
+utilisateur** (je ne peux pas le faire depuis cette session — nécessite
+ta vraie instance HA) :
+1. Ajouter `https://github.com/KingjulianB/Ourmovie` comme dépôt
+   d'add-ons dans HA (Paramètres → Add-ons → Boutique → ⋮ → Dépôts)
+2. Installer l'add-on **Ourmovie**, le démarrer
+3. Ouvrir l'interface (bouton "OPEN WEB UI", ou `http://<ip-ha>:8099`
+   en direct) et tester la création de compte / de salon
+
+**statut :** terminé côté code — installation réelle à faire par l'utilisateur
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
-- Squelette de code de l'add-on (Dockerfile, config.yaml réels) — reporté à une session future, une fois l'architecture actée
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée
+- Configuration réelle du Cloudflare Tunnel — nécessite le compte/domaine Cloudflare de l'utilisateur
 
 ---
 
