@@ -2,8 +2,17 @@
 // `import type` est erasé à la compilation : pas d'appel runtime vers ../ws/protocol.js.
 import type { RoomState, ChatMessage } from '../ws/protocol.js';
 
-// Servi automatiquement par le serveur Socket.IO à /socket.io/socket.io.js.
-declare const io: (opts?: { auth?: Record<string, unknown> }) => any;
+// Servi automatiquement par le serveur Socket.IO à <base>/socket.io/socket.io.js.
+declare const io: (opts?: { auth?: Record<string, unknown>; path?: string }) => any;
+
+// L'add-on est servi sous un préfixe variable (racine en local, mais
+// /api/hassio_ingress/<token>/ derrière l'Ingress HA) : tous les appels
+// réseau doivent être relatifs à ce préfixe, jamais en chemin absolu "/...".
+function computeBasePath(): string {
+  const path = window.location.pathname;
+  return path.endsWith('/') ? path : path.slice(0, path.lastIndexOf('/') + 1);
+}
+const BASE_PATH = computeBasePath();
 
 const STORAGE_TOKEN_KEY = 'ourmovie_token';
 const STORAGE_USERNAME_KEY = 'ourmovie_username';
@@ -35,7 +44,9 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const res = await fetch(path, { ...options, headers });
+  // `path` est relatif (ex: "api/auth/login"), préfixé par BASE_PATH pour rester
+  // correct sous l'Ingress HA (voir computeBasePath ci-dessus).
+  const res = await fetch(`${BASE_PATH}${path}`, { ...options, headers });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `Erreur ${res.status}`);
   return body;
@@ -57,7 +68,7 @@ document.getElementById('login-form')!.addEventListener('submit', async (e) => {
   e.preventDefault();
   const data = new FormData(e.target as HTMLFormElement);
   try {
-    const result = await apiFetch('/api/auth/login', {
+    const result = await apiFetch('api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username: data.get('username'), password: data.get('password') }),
     });
@@ -73,7 +84,7 @@ document.getElementById('register-form')!.addEventListener('submit', async (e) =
   e.preventDefault();
   const data = new FormData(e.target as HTMLFormElement);
   try {
-    const result = await apiFetch('/api/auth/register', {
+    const result = await apiFetch('api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username: data.get('username'), password: data.get('password') }),
     });
@@ -89,7 +100,7 @@ document.getElementById('create-room-form')!.addEventListener('submit', async (e
   e.preventDefault();
   const data = new FormData(e.target as HTMLFormElement);
   try {
-    const result = await apiFetch('/api/rooms', {
+    const result = await apiFetch('api/rooms', {
       method: 'POST',
       body: JSON.stringify({ videoUrl: data.get('videoUrl') || undefined }),
     });
@@ -105,7 +116,7 @@ document.getElementById('join-room-form')!.addEventListener('submit', async (e) 
   const data = new FormData(e.target as HTMLFormElement);
   const code = String(data.get('code') ?? '').trim().toUpperCase();
   try {
-    await apiFetch(`/api/rooms/${code}`);
+    await apiFetch(`api/rooms/${code}`);
     setError('lobby-error', '');
     enterRoom(code);
   } catch (err) {
@@ -115,7 +126,10 @@ document.getElementById('join-room-form')!.addEventListener('submit', async (e) 
 
 function ensureSocket() {
   if (socket) return socket;
-  socket = io({ auth: { token } });
+  // `path` doit être un chemin absolu réel (l'option socket.io ne fait pas de
+  // résolution relative comme un <script src>) — on reconstruit donc l'URL
+  // complète à partir de BASE_PATH pour rester correct sous l'Ingress HA.
+  socket = io({ auth: { token }, path: `${BASE_PATH}socket.io/` });
   socket.on('state', applyRemoteState);
   socket.on('chat', appendChatMessage);
   socket.on('error', (err: { message: string }) => alert(err.message));

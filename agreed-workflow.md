@@ -17,15 +17,30 @@ change — c'est la source de vérité, pas un doc figé posé une fois.
 
 ## Gotchas d'environnement / outils
 
-Rien d'identifié pour l'instant — le projet vient d'être bootstrapé
-(2026-09-20), aucun code ni infra encore en place. Cette section sera
-remplie au fil des sessions dès qu'un piège concret est découvert (ex :
-un comportement surprenant de l'add-on store Home Assistant, une
-limite de l'Ingress HA, etc.).
-
 ### Gotchas spécifiques Home Assistant
-*(à remplir une fois qu'on touche réellement au packaging add-on —
-config.yaml, Supervisor, Ingress, etc.)*
+
+- **Port 8099 très disputé entre add-ons.** Ne pas ajouter de mapping
+  `ports:` explicite "juste au cas où" — ça réserve réellement le port
+  côté hôte et peut entrer en conflit avec un autre add-on déjà
+  installé. `ingress_port` seul ne réserve rien côté hôte. (Rencontré
+  en 0.2.0, corrigé en 0.2.1 — voir `OURMOVIE-FIX-LOG.md`.)
+- **L'Ingress sert l'add-on sous un préfixe variable**
+  (`/api/hassio_ingress/<token>/`), jamais à la racine du domaine. Tout
+  chemin **absolu** (`/app.js`, `/api/...`) dans le HTML/JS pointera
+  vers la racine de Home Assistant au lieu de l'add-on — CSS/JS ne
+  chargeront pas, silencieusement (pas d'erreur bloquante visible pour
+  l'utilisateur, juste une page sans style/interaction). Toujours
+  utiliser des chemins relatifs pour les assets, et calculer un
+  "BASE_PATH" côté client (depuis `window.location.pathname`) pour tout
+  ce qui a besoin d'un chemin absolu réel (ex : l'option `path` du
+  client Socket.IO, qui ne fait pas de résolution relative comme un
+  `<script src>`). (Rencontré et corrigé en 0.2.2.)
+- **Ne jamais logger la query string** d'une requête HTTP sans y
+  réfléchir — un bug frontend peut faire retomber un formulaire sur une
+  soumission GET native du navigateur, ce qui met les champs (mot de
+  passe inclus) en clair dans l'URL, donc dans les logs du serveur.
+  Corrigé en 0.2.2 via un serializer `req` custom sur le logger
+  Fastify qui retire systématiquement la query string.
 
 ## Pourquoi certaines opérations nécessitent une validation explicite
 

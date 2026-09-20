@@ -30,6 +30,51 @@ risque qu'elle visait à couvrir n'avait jamais été confirmé.
 `discrepancies.md`) reste théorique à ce stade — à surveiller une fois
 l'add-on réellement utilisé.
 
+## Frontend inerte + pas de style derrière l'Ingress, mot de passe fuité dans les logs (2026-09-20)
+
+**Constaté par l'utilisateur** : "ça a démarré, je teste la création
+de compte et ya rien qui se passe et aussi ya pas de style la page est
+moche". Logs fournis ensuite confirmant le diagnostic :
+`GET /?username=bamokina&password=Bamokina45*` — soumission de
+formulaire HTML native (méthode GET par défaut, pas d'`action`), donc
+le JavaScript n'avait pas chargé.
+
+**Cause :** `index.html` référençait ses assets avec des chemins
+**absolus** (`/styles.css`, `/app.js`, `/socket.io/socket.io.js`), et
+`app.ts` appelait l'API avec des chemins absolus (`/api/...`). Derrière
+l'Ingress HA, la page est servie sous un préfixe
+(`/api/hassio_ingress/<token>/`) — un chemin absolu `/xxx` pointe donc
+vers la racine de Home Assistant, pas vers l'add-on. Résultat : CSS et
+JS ne chargeaient pas du tout (404 silencieux), donc aucun gestionnaire
+d'événement n'était attaché, et le clic sur "Créer un compte" déclenchait
+la soumission HTML par défaut du navigateur — en GET, avec les
+identifiants dans la query string, capturés en clair par le logger
+Fastify.
+
+**Conséquence de sécurité :** le mot de passe de l'utilisateur s'est
+retrouvé en clair dans les logs du conteneur (et dans cette
+conversation, collée par l'utilisateur pour diagnostiquer). **Mot de
+passe à changer** lors du prochain test.
+
+**Fix (0.2.2) :**
+- Tous les chemins d'assets/API passés en relatif (`styles.css`,
+  `app.js`, `api/...`), avec un `BASE_PATH` calculé côté client depuis
+  `window.location.pathname` pour reconstruire l'URL absolue nécessaire
+  à l'option `path` du client Socket.IO (qui ne fait pas de résolution
+  relative comme un `<script src>`).
+- Logger Fastify configuré avec un serializer `req` custom qui retire
+  la query string avant journalisation (défense en profondeur contre
+  une récidive, quelle que soit la cause).
+- Formulaires passés en `method="post"` (défense en profondeur
+  supplémentaire — n'expose plus les identifiants dans l'URL même si le
+  JS échoue à nouveau pour une autre raison).
+
+**Vérifié :** build propre, inscription testée en local (racine sans
+préfixe, donc `BASE_PATH = '/'`, chemin de compatibilité inchangé), et
+confirmé qu'une requête avec query string n'apparaît plus dans les logs.
+**Non vérifié** en conditions réelles d'Ingress (nécessiterait de
+rejouer le test depuis l'installation HA de l'utilisateur).
+
 ## @fastify/static — vulnérabilité path traversal / bypass d'auth (2026-09-20)
 
 `npm install` initial a résolu `@fastify/static@7.0.4`, vulnérable
