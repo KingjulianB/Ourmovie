@@ -352,11 +352,10 @@ backend, mêmes comptes que le web/l'extension.
 - [x] Vulnérabilité haute sévérité Electron trouvée par `npm audit` et corrigée (bump `^33` → `^44.4.3`)
 - [x] **Vérifié réellement** : `npm install` + `npm run build` + lancement de l'app en tâche de fond sur la machine de l'utilisateur (vraie fenêtre, pas une simulation) — 5 process `electron.exe` actifs, aucune erreur dans les logs au démarrage
 
-**Non vérifié :** utilisation de bout en bout par l'utilisateur
-(connexion, navigation, création de salon, sync à deux) — la fenêtre
-est ouverte, à tester directement.
+**Confirmé par l'utilisateur (2026-09-20) :** "ça marche aussi sur mon
+pc" — app testée réellement, fonctionnelle.
 
-**statut :** terminé côté code, app lancée et en attente de test utilisateur
+**statut :** terminé et confirmé fonctionnel par l'utilisateur
 
 ---
 
