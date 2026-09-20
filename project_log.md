@@ -19,7 +19,9 @@ supprimées.
 
 ## Problèmes connus (pas des décisions — en cours d'investigation, rien à faire de ton côté pour l'instant)
 
-*(aucun pour l'instant — le point Netflix/DRM est résolu, voir Résolu ci-dessous)*
+| # | Problème | Statut |
+|---|---|---|
+| 1 | App iOS demandée mais impossible à construire sans Mac/Xcode | Plan documenté (`day1_objectives.md` Objectif K), en attente d'accès à un Mac — voir `discrepancies.md` § App iOS |
 
 ## Résolu
 

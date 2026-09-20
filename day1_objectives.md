@@ -359,7 +359,49 @@ pc" — app testée réellement, fonctionnelle.
 
 ---
 
+## Objectif K — Plan pour une app iOS (pas construite aujourd'hui)
+
+Demandé : compatibilité iPhone. Electron ne tourne pas sur iOS — c'est
+une techno de bureau uniquement (Windows/Mac/Linux). Une vraie app
+iPhone nécessite Xcode, qui ne tourne que sur Mac : **impossible à
+construire ou à vérifier depuis cette session Windows.** Contrairement
+au Mac (même code Electron, juste lancé sur une machine Mac), il n'y a
+pas de raccourci ici.
+
+**Ce qui marche déjà sur iPhone sans rien construire :** l'interface
+web (`ourmovie/src/public`) — un site classique, s'ouvre dans Safari
+comme sur n'importe quel navigateur. Couvre le cas "lien vidéo direct"
+(V1) + chat texte.
+
+**Plan pour la vraie app native (à exécuter plus tard, sur un Mac avec
+Xcode) :** même principe que l'app desktop Electron, transposé en iOS —
+
+- **WKWebView** (l'équivalent iOS du `<webview>` Electron) pour le
+  navigateur intégré, avec un `WKUserScript`/`WKScriptMessageHandler`
+  injecté — l'équivalent direct de `desktop/src/preload-webview.ts` :
+  même logique de détection/contrôle de `<video>` (à réécrire en JS
+  injecté par WKWebView plutôt que porté tel quel, mais le principe et
+  le protocole Socket.IO sont identiques).
+- **SwiftUI** pour l'interface (barre d'adresse, login/salon/chat) —
+  équivalent de `desktop/src/renderer/`.
+- Même backend, mêmes comptes, aucun changement côté serveur.
+
+**Prérequis pour exécuter ce plan :** un Mac, Xcode installé, et un
+compte développeur Apple (gratuit pour tester sur son propre iPhone via
+câble ; payant — 99 $/an — seulement si distribution au-delà de soi-même
+ou publication App Store).
+
+**Décision délibérée :** ne pas écrire de code Swift maintenant — du
+code que je ne peux ni compiler ni exécuter ici risquerait de sembler
+prêt alors qu'il ne le serait pas. À reprendre dans une session future
+lancée depuis un Mac.
+
+**statut :** planifié, non commencé — voir `discrepancies.md`
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
+- App iOS native — voir Objectif K (nécessite un Mac + Xcode, pas disponible aujourd'hui)
 - Packaging de l'app desktop en installeur (`.exe`, electron-builder) — se lance via `npm start` pour l'instant
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée
 - Adaptateur Netflix spécifique (API privée) pour l'extension — le contrôle générique `<video>` suffit pour beaucoup de sites, mais pas nécessairement Netflix

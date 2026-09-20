@@ -17,7 +17,22 @@ va dans le `dayX_objectives.md` du jour.
 
 ## Open
 
-*(aucun sujet ouvert pour l'instant — voir Resolved ci-dessous)*
+### App iOS — bloquée par l'absence de Mac/Xcode dans cette session
+
+**Contexte :** l'utilisateur veut une app iPhone façon Rave (navigateur
+intégré + sync). Ce n'est pas un choix technique à trancher — c'est un
+vrai blocage d'outillage : le développement iOS natif nécessite Xcode,
+qui ne tourne que sur macOS, et cette session tourne sur Windows. Rien
+d'équivalent au raccourci "même code Electron, juste lancé sur un Mac"
+n'existe pour iOS.
+
+**Ce qui est nécessaire :** un Mac avec Xcode installé, et reprendre le
+plan documenté dans `day1_objectives.md` (Objectif K : WKWebView +
+script injecté + SwiftUI, même principe que l'app desktop). Pas de
+code Swift écrit maintenant — non vérifiable depuis cet environnement,
+risque de sembler prêt sans l'être.
+
+**Statut :** en attente d'accès à un Mac.
 
 ---
 
