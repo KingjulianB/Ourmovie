@@ -13,6 +13,7 @@ interface RoomRow {
   video_url: string | null;
   paused: number;
   position: number;
+  updated_at: string;
 }
 
 function loadRoom(code: string): RoomRow | undefined {
@@ -20,11 +21,25 @@ function loadRoom(code: string): RoomRow | undefined {
 }
 
 function toState(room: RoomRow, participants: string[]): RoomState {
+  // `position` en base n'est mise à jour que sur un événement explicite
+  // (play/pause/seek) — pas en continu pendant la lecture. En lecture, on calcule
+  // donc la position réelle actuelle à partir du temps écoulé depuis la dernière
+  // mise à jour, sinon la correction anti-dérive périodique renverrait une
+  // position figée et forcerait un retour en arrière en boucle (bug réel observé
+  // avec des lectures de plus de quelques secondes — cf. OURMOVIE-FIX-LOG.md).
+  let position = room.position;
+  if (!room.paused) {
+    const updatedAtMs = new Date(`${room.updated_at}Z`).getTime();
+    if (Number.isFinite(updatedAtMs)) {
+      const elapsedSec = (Date.now() - updatedAtMs) / 1000;
+      if (elapsedSec > 0) position += elapsedSec;
+    }
+  }
   return {
     roomCode: room.code,
     videoUrl: room.video_url,
     paused: Boolean(room.paused),
-    position: room.position,
+    position,
     participants,
   };
 }
@@ -106,6 +121,11 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     // source du salon, et tout le monde va être redirigé dessus (cf. day1_objectives.md).
     socket.on('set-source', ({ url }: { url: string }) => {
       if (!currentRoomCode || !url) return;
+      const room = loadRoom(currentRoomCode);
+      // Garde-fou côté serveur en plus de celui du client : si c'est déjà la
+      // source connue, ne rien faire — évite de remettre position à 0 en boucle
+      // si un client renvoie plusieurs fois le même événement (cf. fix log).
+      if (!room || room.video_url === url) return;
       db.prepare(
         `UPDATE rooms SET video_url = ?, position = 0, paused = 1, updated_at = datetime('now') WHERE code = ?`
       ).run(url, currentRoomCode);

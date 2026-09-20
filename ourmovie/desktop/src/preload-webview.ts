@@ -9,6 +9,13 @@ import { ipcRenderer } from 'electron';
 
 let video: HTMLVideoElement | null = null;
 let suppressEvents = false;
+// Sur les sites très dynamiques (YouTube, SPA), l'élément <video> peut être
+// recréé/remplacé en interne plusieurs fois pour la MÊME vidéo (changement de
+// qualité, re-render React, etc.). Sans ce verrou, chaque remplacement serait
+// pris pour "une nouvelle vidéo" et repartagé au salon, remettant tout à zéro
+// en boucle (bug réel observé avec YouTube). On ne partage donc la source
+// qu'une seule fois par chargement de page.
+let sourceReported = false;
 
 function pickBestVideo(): HTMLVideoElement | null {
   const videos = Array.from(document.querySelectorAll('video'));
@@ -28,10 +35,11 @@ function emit(type: 'play' | 'pause' | 'seek', position: number) {
 function attach(v: HTMLVideoElement) {
   if (video === v) return;
   video = v;
-  console.log('[ourmovie-preload] vidéo détectée sur', window.location.href, v);
-  // Nouvelle vidéo détectée sur cette page : on la propose comme source du salon.
-  // main.ts filtre les doublons (si c'est déjà la source connue, rien ne se passe).
-  ipcRenderer.send('local-video-source', window.location.href);
+  console.log('[ourmovie-preload] vidéo (ré)attachée sur', window.location.href);
+  if (!sourceReported) {
+    sourceReported = true;
+    ipcRenderer.send('local-video-source', window.location.href);
+  }
   v.addEventListener('play', () => emit('play', v.currentTime));
   v.addEventListener('pause', () => emit('pause', v.currentTime));
   v.addEventListener('seeked', () => emit('seek', v.currentTime));

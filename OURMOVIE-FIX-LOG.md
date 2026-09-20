@@ -49,6 +49,39 @@ querySelectorAll('video')` ne trouve jamais rien.
 `<video>` dans son DOM (ex: une page de démo HTML5, pas un lien direct
 vers le fichier).
 
+## Vidéo YouTube en boucle sur les premières secondes (2026-09-21)
+
+**Constaté par l'utilisateur :** en regardant une vidéo YouTube, elle
+"tourne en boucle sur les première seconde".
+
+**Cause (confirmée dans les logs — motif `0.25, 0, 0, 0.74, 0.74, 0,
+1.05, 0...`) :** deux bugs combinés.
+1. YouTube (SPA lourde) recrée régulièrement son élément `<video>`
+   interne pour la même vidéo (changement de qualité, re-render...).
+   `preload-webview.ts` traitait chaque remplacement comme "une
+   nouvelle vidéo" et repartageait la source au salon, ce qui
+   remettait `position` à 0 côté serveur à chaque fois.
+2. La correction anti-dérive périodique (toutes les 3s) renvoyait la
+   position telle que figée en base au dernier événement explicite
+   (play/pause/seek), jamais mise à jour en continu pendant la
+   lecture — donc après quelques secondes de lecture normale, l'écart
+   dépassait le seuil de correction et forçait un retour en arrière.
+
+**Fix (0.3.2) :**
+- La source n'est partagée qu'une seule fois par chargement de page
+  (`sourceReported` dans `preload-webview.ts`), peu importe combien de
+  fois l'élément `<video>` est réattaché.
+- La position est calculée en direct côté serveur pendant la lecture
+  (position stockée + temps écoulé depuis `updated_at`), pas juste
+  relue telle quelle.
+- Garde-fou supplémentaire côté serveur : un `set-source` avec la même
+  URL que la source déjà connue est ignoré.
+
+**Vérifié :** test scripté confirmant que (a) un `set-source` en
+double n'entraîne plus de rebroadcast, et (b) la position renvoyée
+augmente bien avec le temps réel écoulé pendant une lecture, au lieu
+de rester figée.
+
 ## Conflit de port 8099 à l'installation réelle (2026-09-20)
 
 **Constaté par l'utilisateur** à l'installation sur sa vraie instance

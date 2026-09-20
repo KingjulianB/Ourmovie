@@ -1,5 +1,17 @@
 # Changelog — Ourmovie
 
+## 0.3.2 (2026-09-21)
+
+- Correction : boucle de lecture sur YouTube (et sites SPA similaires)
+  — l'élément `<video>` interne est recréé plusieurs fois pour la même
+  vidéo, ce qui repartageait la source en boucle et remettait tout à
+  zéro. La source n'est maintenant partagée qu'une fois par page.
+- Correction : la position n'était plus recalculée pendant la lecture
+  (valeur figée en base), ce qui pouvait forcer un retour en arrière à
+  chaque correction anti-dérive périodique. Calculée en direct
+  maintenant, à partir du temps écoulé depuis le dernier événement.
+- Garde-fou serveur supplémentaire contre les doublons `set-source`.
+
 ## 0.3.1 (2026-09-21)
 
 - Nouveau : événement `set-source` côté serveur — quand un participant
