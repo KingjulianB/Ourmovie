@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/main.ts", "src/preload-webview.ts"]
+  "include": ["src/main.ts", "src/preload-webview.ts", "src/preload-app.ts"]
 }

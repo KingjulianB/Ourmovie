@@ -1,5 +1,12 @@
 # Changelog — Ourmovie
 
+## 0.3.1 (2026-09-21)
+
+- Nouveau : événement `set-source` côté serveur — quand un participant
+  navigue vers une nouvelle vidéo, elle devient la source du salon et
+  tout le monde est redirigé dessus automatiquement (façon Rave).
+  Nécessaire pour l'app desktop et l'extension (V2).
+
 ## 0.3.0 (2026-09-20)
 
 - **Extension navigateur (V2)** dans `extension/` — synchronise la

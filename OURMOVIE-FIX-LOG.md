@@ -4,6 +4,51 @@ Journal en ajout continu des bugs notables trouvés/corrigés et des
 "faux positifs" confirmés — utile à savoir avant de re-diagnostiquer
 quelque chose déjà investigué.
 
+## "videoUrl reste null" — backend modifié mais jamais poussé/redéployé (2026-09-21)
+
+**Constaté :** après avoir ajouté le partage automatique de source
+(`set-source`) au serveur et à l'app desktop, les deux fenêtres de test
+recevaient toujours `videoUrl: null`, alors que le play/pause/seek
+marchait normalement.
+
+**Cause :** le changement du serveur (`ourmovie/src/ws/socket.ts`) avait
+été testé en local (script + serveur de test sur un port temporaire)
+mais **jamais commité ni poussé sur GitHub**, donc jamais redéployé sur
+la vraie instance HA de l'utilisateur. Le serveur réel tournait encore
+sur l'ancienne version, qui ignore silencieusement un événement
+Socket.IO qu'elle ne connaît pas (`set-source`) — pas d'erreur visible,
+juste un état qui ne se met jamais à jour. Diagnostiqué grâce à des
+logs de diagnostic ajoutés dans `main.ts`/`preload-webview.ts` de l'app
+desktop, qui ont montré que le côté client détectait bien la vidéo et
+émettait l'événement, mais que le serveur ne renvoyait jamais le
+`videoUrl` correspondant.
+
+**Leçon :** avant de déboguer un comportement serveur qui semble
+"ignoré", vérifier que le code modifié a bien été commité, poussé, et
+que la version installée sur l'instance réelle a été mise à jour — pas
+supposer que "j'ai testé en local" veut dire "c'est déployé".
+
+**Fix :** commit + push + bump version (0.3.1) du changement `socket.ts`
+concerné, voir `CHANGELOG.md`.
+
+## Lien de test .mp4 direct → aucune vidéo détectée (2026-09-21)
+
+**Constaté :** en testant avec un lien direct vers un fichier `.mp4`
+(`.../BigBuckBunny.mp4`), la navigation réussissait (`did-finish-load`
+confirmé dans les logs) mais aucune balise `<video>` n'était jamais
+détectée par `preload-webview.ts`.
+
+**Cause :** un lien direct vers un fichier vidéo fait afficher à
+Chromium son lecteur vidéo natif interne (pas une page HTML normale
+avec un DOM standard) — les scripts injectés (preload/content script)
+ne s'exécutent pas dans ce contexte spécial, donc `document.
+querySelectorAll('video')` ne trouve jamais rien.
+
+**Pas un bug du code Ourmovie** — comportement normal de Chromium.
+**Fix :** pour tester, utiliser une vraie page web contenant une balise
+`<video>` dans son DOM (ex: une page de démo HTML5, pas un lien direct
+vers le fichier).
+
 ## Conflit de port 8099 à l'installation réelle (2026-09-20)
 
 **Constaté par l'utilisateur** à l'installation sur sa vraie instance

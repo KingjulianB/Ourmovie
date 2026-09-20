@@ -1,7 +1,10 @@
 // Panneau app de la fenêtre principale : barre d'adresse (pilote le <webview>),
 // login/inscription, création/rejoint de salon, chat. Aucun accès Node ici
-// (nodeIntegration: false) — juste fetch/DOM/socket.io-client, comme le frontend web.
-// La sync vidéo elle-même tourne dans le <webview> (voir preload-webview.ts).
+// (nodeIntegration: false) — communique avec main.ts via le pont exposé par
+// preload-app.ts (window.ourmovie). La connexion Socket.IO et la sync vidéo elles-mêmes
+// vivent dans main.ts + preload-webview.ts (voir ces fichiers).
+
+export {}; // force ce fichier en "module" TS, requis pour que `declare global` soit valide
 
 interface ChatMessage {
   from: string;
@@ -15,6 +18,21 @@ interface RoomState {
   paused: boolean;
   position: number;
   participants: string[];
+}
+
+interface OurmovieBridge {
+  joinRoom(payload: { serverUrl: string; token: string; roomCode: string }): void;
+  leaveRoom(): void;
+  sendChat(text: string): void;
+  onSyncState(callback: (state: RoomState) => void): void;
+  onChatReceived(callback: (message: ChatMessage) => void): void;
+  onSyncError(callback: (message: string) => void): void;
+}
+
+declare global {
+  interface Window {
+    ourmovie: OurmovieBridge;
+  }
 }
 
 const STORAGE_KEYS = {
@@ -133,6 +151,18 @@ function saveSession(newToken: string, newUsername: string) {
   localStorage.setItem(STORAGE_KEYS.username, newUsername);
 }
 
+document.getElementById('logout')!.addEventListener('click', () => {
+  window.ourmovie.leaveRoom();
+  token = undefined;
+  username = undefined;
+  localStorage.removeItem(STORAGE_KEYS.token);
+  localStorage.removeItem(STORAGE_KEYS.username);
+  (document.getElementById('login-form') as HTMLFormElement).reset();
+  (document.getElementById('register-form') as HTMLFormElement).reset();
+  setError('auth-error', '');
+  showView('auth');
+});
+
 document.getElementById('create-room-form')!.addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
@@ -161,11 +191,11 @@ function enterRoom(code: string) {
   (document.getElementById('room-code') as HTMLElement).textContent = code;
   (document.getElementById('chat-messages') as HTMLElement).innerHTML = '';
   showView('room');
-  webview.send('join-room', { serverUrl, token, roomCode: code });
+  window.ourmovie.joinRoom({ serverUrl, token: token as string, roomCode: code });
 }
 
 document.getElementById('leave-room')!.addEventListener('click', () => {
-  webview.send('leave-room');
+  window.ourmovie.leaveRoom();
   showView('lobby');
 });
 
@@ -174,7 +204,7 @@ document.getElementById('chat-form')!.addEventListener('submit', (e) => {
   const input = document.getElementById('chat-input') as HTMLInputElement;
   const text = input.value.trim();
   if (!text) return;
-  webview.send('send-chat', text);
+  window.ourmovie.sendChat(text);
   input.value = '';
 });
 
@@ -191,16 +221,13 @@ function appendChatMessage(msg: ChatMessage) {
   container.scrollTop = container.scrollHeight;
 }
 
-webview.addEventListener('ipc-message', (event) => {
-  if (event.channel === 'chat-received') {
-    appendChatMessage(event.args[0] as ChatMessage);
-  } else if (event.channel === 'sync-state') {
-    const state = event.args[0] as RoomState;
-    (document.getElementById('room-participants') as HTMLElement).textContent =
-      state.participants.join(', ');
-  } else if (event.channel === 'sync-error') {
-    setError('lobby-error', String(event.args[0] ?? 'Erreur de synchronisation'));
-  }
+window.ourmovie.onChatReceived(appendChatMessage);
+window.ourmovie.onSyncState((state) => {
+  (document.getElementById('room-participants') as HTMLElement).textContent =
+    state.participants.join(', ');
+});
+window.ourmovie.onSyncError((message) => {
+  setError('lobby-error', message || 'Erreur de synchronisation');
 });
 
 function init() {

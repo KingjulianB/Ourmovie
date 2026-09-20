@@ -66,4 +66,19 @@ pas de blâmer, c'est d'éviter de redécouvrir la même erreur. Ne jamais
 supprimer ou modifier une entrée existante ; ajouter des corrections
 comme nouvelles entrées.
 
-*(aucun incident pour l'instant)*
+- **2026-09-20** : demande explicite de support pour `streamzo.fr`
+  (site de streaming illégal) refusée — construction d'une extension
+  puis d'une app desktop génériques à la place (contrôlent n'importe
+  quel site, pas ciblées). Pendant un test de sync le 2026-09-21,
+  l'utilisateur a navigué vers ce même site dans l'app desktop pour
+  tester la détection vidéo — débogage arrêté sur ce cas précis,
+  redirigé vers des liens vidéo légaux pour continuer. Rappel : le
+  navigateur intégré est un outil neutre (comme n'importe quel
+  navigateur), mais l'agent n'aide pas à faire fonctionner la sync sur
+  du contenu piraté spécifiquement.
+- **2026-09-21** : un changement backend (`socket.ts`, événement
+  `set-source`) a été testé en local mais pas commité/poussé avant de
+  passer aux tests avec l'utilisateur sur sa vraie instance HA — a
+  causé une session de débogage confuse (`videoUrl` toujours `null`)
+  qui aurait pu être évitée en vérifiant d'abord que le serveur réel
+  tournait la version attendue. Voir `OURMOVIE-FIX-LOG.md`.

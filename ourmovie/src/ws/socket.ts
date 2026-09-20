@@ -102,6 +102,16 @@ export function attachSocketServer(httpServer: HttpServer): Server {
     socket.on('pause', ({ position }: { position: number }) => updatePlayback({ paused: true, position }));
     socket.on('seek', ({ position }: { position: number }) => updatePlayback({ position }));
 
+    // Quelqu'un a navigué vers une nouvelle page avec une vidéo : elle devient la
+    // source du salon, et tout le monde va être redirigé dessus (cf. day1_objectives.md).
+    socket.on('set-source', ({ url }: { url: string }) => {
+      if (!currentRoomCode || !url) return;
+      db.prepare(
+        `UPDATE rooms SET video_url = ?, position = 0, paused = 1, updated_at = datetime('now') WHERE code = ?`
+      ).run(url, currentRoomCode);
+      broadcastState(io, currentRoomCode);
+    });
+
     socket.on('chat', ({ message }: { message: string }) => {
       if (!currentRoomCode || !message?.trim()) return;
       const chatMessage: ChatMessage = {

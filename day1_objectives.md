@@ -400,6 +400,48 @@ lancée depuis un Mac.
 
 ---
 
+## Objectif L — Partage/suivi automatique de source (2026-09-21)
+
+L'utilisateur a précisé ce qu'il attendait vraiment : chaque navigateur
+indépendant, celui qui navigue vers une vidéo et clique dessus la
+partage automatiquement au salon, l'autre est redirigé dessus
+automatiquement — vraiment le mécanisme Rave, pas juste play/pause/seek
+sur une vidéo déjà affichée des deux côtés.
+
+**Changements :**
+- Backend (`socket.ts`) : nouvel événement `set-source` — met à jour
+  `rooms.video_url` et rebroadcast l'état à tout le salon.
+- Desktop : connexion Socket.IO déplacée de `preload-webview.ts` vers
+  `main.ts` (process principal) — nécessaire car le `<webview>` se
+  détruit à chaque navigation, donc toute connexion tenue dans son
+  preload serait perdue. `main.ts` détecte un changement de source
+  distant et appelle `webviewContents.loadURL(...)` pour rediriger
+  automatiquement.
+- Nouveau `preload-app.ts` (pont `contextBridge` pour le panneau app,
+  qui n'a plus de communication directe avec le `<webview>`).
+- Bouton de déconnexion ajouté (demandé pour tester avec deux comptes
+  différents dans deux fenêtres).
+
+**Deux vrais bugs trouvés et corrigés pendant la vérification en
+conditions réelles** (voir `OURMOVIE-FIX-LOG.md` pour le détail) :
+1. Le changement backend avait été testé en local mais jamais poussé —
+   le serveur réel de l'utilisateur ignorait silencieusement le nouvel
+   événement. Corrigé : commit + push + bump version (0.3.1).
+2. Un lien direct vers un fichier `.mp4` ne peut pas être détecté
+   (Chromium affiche son lecteur natif, pas une page avec DOM
+   standard) — pas un bug du code, il faut une vraie page web avec une
+   balise `<video>` pour tester.
+
+**Incident :** en testant, l'utilisateur a navigué vers `streamzo.fr`
+(site de streaming illégal déjà refusé plus tôt dans la session) —
+débogage arrêté sur ce cas, redirigé vers des liens légaux. Voir
+`agreed-workflow.md` § Journal d'incidents.
+
+**statut :** corrections poussées (0.3.1), en attente de mise à jour de
+l'add-on par l'utilisateur puis nouveau test avec une vraie page vidéo
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
 - App iOS native — voir Objectif K (nécessite un Mac + Xcode, pas disponible aujourd'hui)
 - Packaging de l'app desktop en installeur (`.exe`, electron-builder) — se lance via `npm start` pour l'instant
