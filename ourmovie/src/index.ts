@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { authRoutes } from './http/auth.js';
@@ -25,6 +26,12 @@ const app = Fastify({
     },
   },
 });
+
+// L'extension navigateur (V2) appelle ce serveur depuis un contexte d'extension
+// (origine chrome-extension://...), donc cross-origin par nature. Sans risque
+// CSRF significatif ici : l'auth est par token Bearer explicite (chrome.storage
+// côté extension), jamais par cookie envoyé automatiquement par le navigateur.
+await app.register(fastifyCors, { origin: true });
 
 await app.register(fastifyStatic, {
   root: join(__dirname, 'public'),

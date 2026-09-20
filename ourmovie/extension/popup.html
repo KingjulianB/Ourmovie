@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Ourmovie</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header><h1>Ourmovie</h1></header>
+
+  <section id="setup-view">
+    <h2>Serveur</h2>
+    <p class="hint">Adresse de ton add-on Ourmovie (pas l'Ingress HA — l'URL/port direct, ex: Cloudflare Tunnel ou <code>http://192.168.x.x:38099</code>).</p>
+    <form id="setup-form">
+      <input name="serverUrl" placeholder="http://192.168.1.50:38099" required />
+      <button type="submit">Continuer</button>
+    </form>
+  </section>
+
+  <section id="auth-view" hidden>
+    <h2>Connexion</h2>
+    <form id="login-form" method="post">
+      <input name="username" placeholder="Nom d'utilisateur" required />
+      <input name="password" type="password" placeholder="Mot de passe" required />
+      <button type="submit">Se connecter</button>
+    </form>
+    <h2>Créer un compte</h2>
+    <form id="register-form" method="post">
+      <input name="username" placeholder="Nom d'utilisateur" required />
+      <input name="password" type="password" placeholder="Mot de passe (8+ caractères)" required minlength="8" />
+      <button type="submit">Créer un compte</button>
+    </form>
+    <p id="auth-error" class="error" hidden></p>
+  </section>
+
+  <section id="lobby-view" hidden>
+    <h2>Salon</h2>
+    <form id="create-room-form">
+      <p class="hint">Va d'abord sur la page où se trouve la vidéo, puis crée le salon ici.</p>
+      <button type="submit">Créer un salon pour cet onglet</button>
+    </form>
+    <form id="join-room-form">
+      <input name="code" placeholder="Code du salon" required />
+      <button type="submit">Rejoindre</button>
+    </form>
+    <p id="lobby-error" class="error" hidden></p>
+  </section>
+
+  <section id="room-view" hidden>
+    <div class="room-header">
+      <h2>Salon <span id="room-code"></span></h2>
+      <button id="leave-room">Quitter</button>
+    </div>
+    <p id="room-participants" class="hint"></p>
+    <div id="chat-messages"></div>
+    <form id="chat-form">
+      <input id="chat-input" placeholder="Message..." autocomplete="off" />
+      <button type="submit">Envoyer</button>
+    </form>
+  </section>
+
+  <script src="dist/popup.js"></script>
+</body>
+</html>

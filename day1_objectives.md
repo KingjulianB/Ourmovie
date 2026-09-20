@@ -266,9 +266,73 @@ ta vraie instance HA) :
 
 ---
 
+## Deux incidents réels rencontrés à l'installation (2026-09-20)
+
+Après installation sur la vraie instance HA de l'utilisateur, deux
+bugs concrets sont apparus et ont été corrigés en direct :
+
+1. **Conflit de port 8099** — le mapping direct ajouté en 0.2.0 entrait
+   en collision avec un autre add-on. Corrigé en 0.2.1 (retrait du
+   mapping, l'Ingress seul suffit pour l'accès local).
+2. **Chemins absolus cassés sous l'Ingress + mot de passe fuité dans
+   les logs** — tous les assets/appels API du frontend utilisaient des
+   chemins absolus (`/app.js`, `/api/...`), qui pointent vers la racine
+   de HA au lieu de l'add-on derrière l'Ingress. CSS/JS ne chargeaient
+   pas, et le formulaire retombait sur une soumission HTML native
+   (GET avec les identifiants dans l'URL — capturés en clair par les
+   logs). Corrigé en 0.2.2 : chemins relatifs partout + BASE_PATH
+   calculé côté client, logs sans query string, formulaires en POST.
+
+Détail complet des deux incidents dans `OURMOVIE-FIX-LOG.md` — et le
+gotcha générique (chemins absolus cassés sous l'Ingress) est maintenant
+dans `agreed-workflow.md` pour ne pas le reproduire côté extension ou
+futures pages.
+
+---
+
+## Objectif I — Extension navigateur V2 (contrôle générique de n'importe quel site)
+
+Demandé explicitement : "je veux la possibilité de naviguer moi-même
+[...] je veux ouvrir des pages web comme le fait Rave". Clarifié que
+Rave n'a pas de navigateur/recherche intégrés — c'est une extension qui
+synchronise la balise `<video>` de l'onglet que l'utilisateur ouvre
+lui-même normalement. C'est exactement l'architecture V2 déjà prévue
+(Objectif A/B) : construite maintenant, en avance sur le calendrier
+initial (Netflix/DRM restent en V2 "complète", mais le mécanisme
+générique de sync par extension est là).
+
+**Important, refusé et clarifié avant de commencer :** demande initiale
+de support pour un lien direct vers `streamzo.fr` (site de streaming
+illégal) — refusé (faciliter l'accès à du contenu piraté). L'extension
+construite ici est **générique** (fonctionne sur n'importe quel site
+avec une balise `<video>` standard), pas ciblée sur un site précis, et
+ne contient aucune fonction de recherche/catalogue.
+
+- [x] `extension/manifest.json` (Manifest V3, content script `<all_urls>`, popup)
+- [x] `extension/src/content.ts` — détecte la plus grande balise `<video>` visible, la pilote (play/pause/seek), se connecte au même backend Socket.IO que le frontend web, réémet l'état vers le popup
+- [x] `extension/src/popup.ts` — login/inscription (mêmes comptes que le frontend web), config de l'URL serveur, création/rejoint de salon, chat — relaie les commandes au content script de l'onglet actif via `chrome.tabs.sendMessage`
+- [x] Backend : CORS activé (Fastify + Socket.IO) pour accepter les requêtes cross-origin `chrome-extension://...` — auth par token Bearer, pas de risque CSRF significatif
+- [x] `config.yaml` : port direct remis, sur un numéro moins disputé (`38099` au lieu de `8099`) — nécessaire car l'extension ne peut pas passer par l'Ingress (token de session lié à une instance HA authentifiée)
+- [x] Icônes de l'extension générées (16/48/128, dérivées de `icon.png`)
+- [x] **Vérifié** : type-check TypeScript strict propre, bundle esbuild sans erreur, syntaxe JS validée (`node --check`), CORS testé réellement (requête preflight simulant une origine `chrome-extension://`)
+- [x] Vulnérabilité modérée esbuild trouvée par `npm audit` et corrigée (`^0.28.2`)
+
+**Non vérifié :** chargement réel dans un navigateur (le MCP
+chrome-devtools ne peut pas ouvrir de profil isolé dans cet
+environnement — nombreux processus Chrome déjà ouverts). À tester par
+l'utilisateur via `chrome://extensions` → Mode développeur → Charger
+l'extension non empaquetée → dossier `extension/` (voir
+`extension/README.md`).
+
+**statut :** terminé côté code, premier essai réel à faire par l'utilisateur
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée
+- Adaptateur Netflix spécifique (API privée) pour l'extension — le contrôle générique `<video>` suffit pour beaucoup de sites, mais pas nécessairement Netflix
 - Configuration réelle du Cloudflare Tunnel — nécessite le compte/domaine Cloudflare de l'utilisateur
+- Publication de l'extension sur le Chrome Web Store — nécessite un compte développeur Google et une revue
 
 ---
 

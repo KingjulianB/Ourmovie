@@ -46,6 +46,9 @@ function broadcastState(io: Server, roomCode: string) {
 export function attachSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     path: '/socket.io',
+    // Même raison que le CORS Fastify (index.ts) : l'extension navigateur (V2)
+    // se connecte depuis une origine chrome-extension://..., cross-origin par nature.
+    cors: { origin: true },
   });
 
   io.use((socket, next) => {

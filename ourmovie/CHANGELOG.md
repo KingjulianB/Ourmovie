@@ -1,5 +1,17 @@
 # Changelog — Ourmovie
 
+## 0.3.0 (2026-09-20)
+
+- **Extension navigateur (V2)** dans `extension/` — synchronise la
+  lecture vidéo (play/pause/seek) et le chat sur n'importe quel site
+  avec une balise `<video>` standard, comme Rave/Teleparty. Mêmes
+  comptes que l'interface web (même backend).
+- Backend : CORS activé (Fastify + Socket.IO) pour accepter les
+  requêtes de l'extension.
+- `config.yaml` : port direct remis sur `38099` (au lieu de l'ancien
+  `8099`, source du conflit en 0.2.0/0.2.1) — nécessaire pour que
+  l'extension puisse atteindre le serveur sans passer par l'Ingress.
+
 ## 0.2.2 (2026-09-20)
 
 - **Correction critique** : le frontend utilisait des chemins absolus
