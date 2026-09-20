@@ -328,7 +328,40 @@ l'extension non empaquetée → dossier `extension/` (voir
 
 ---
 
+## Objectif J — Application de bureau (Electron) : navigateur intégré + Rave
+
+L'utilisateur a rejeté l'extension : "je ne veux pas une extension je
+veux que l'application soit comme un navigateur et rave". Clarifié
+qu'un site web ne peut techniquement pas embarquer/contrôler d'autres
+sites (barrière de sécurité du navigateur, pas un choix) — la seule
+façon d'avoir "une app qui navigue elle-même" est une application de
+bureau avec un vrai moteur de navigateur intégré, exactement comme le
+fait l'app mobile de Rave avec sa WebView.
+
+**Architecture :** Electron. Fenêtre principale = barre d'adresse +
+`<webview>` (navigateur intégré) à gauche, panneau connexion/salon/chat
+à droite. Le `<webview>` a un script "preload" isolé (même principe
+qu'un content script d'extension) qui reprend exactement la logique de
+`extension/src/content.ts` (détection/contrôle de `<video>`). Même
+backend, mêmes comptes que le web/l'extension.
+
+- [x] `desktop/src/main.ts` — process principal Electron, fenêtre avec `webviewTag: true`
+- [x] `desktop/src/preload-webview.ts` — détection/contrôle vidéo + connexion Socket.IO (logique portée depuis l'extension)
+- [x] `desktop/src/renderer/` — panneau app (barre d'adresse, navigation précédent/suivant/recharger, login/salon/chat), communique avec le `<webview>` via les IPC natifs d'Electron
+- [x] Build : tsc pour main/preload (contexte Node), tsc + esbuild séparés pour le renderer (contexte navigateur, DOM + types Electron)
+- [x] Vulnérabilité haute sévérité Electron trouvée par `npm audit` et corrigée (bump `^33` → `^44.4.3`)
+- [x] **Vérifié réellement** : `npm install` + `npm run build` + lancement de l'app en tâche de fond sur la machine de l'utilisateur (vraie fenêtre, pas une simulation) — 5 process `electron.exe` actifs, aucune erreur dans les logs au démarrage
+
+**Non vérifié :** utilisation de bout en bout par l'utilisateur
+(connexion, navigation, création de salon, sync à deux) — la fenêtre
+est ouverte, à tester directement.
+
+**statut :** terminé côté code, app lancée et en attente de test utilisateur
+
+---
+
 ## Not in scope today (listé pour ne pas l'oublier, pas laissé de côté par omission)
+- Packaging de l'app desktop en installeur (`.exe`, electron-builder) — se lance via `npm start` pour l'instant
 - Gestion des comptes/identifiants Netflix — hors scope tant que la faisabilité n'est pas confirmée
 - Adaptateur Netflix spécifique (API privée) pour l'extension — le contrôle générique `<video>` suffit pour beaucoup de sites, mais pas nécessairement Netflix
 - Configuration réelle du Cloudflare Tunnel — nécessite le compte/domaine Cloudflare de l'utilisateur

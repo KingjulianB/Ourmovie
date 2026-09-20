@@ -1,0 +1,19 @@
+{
+  "name": "ourmovie-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && node build-renderer.mjs",
+    "start": "npm run build && electron ."
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^44.4.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.6.0"
+  }
+}
