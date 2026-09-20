@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp -r src/public dist/public && cp src/db/schema.sql dist/db/schema.sql",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && cp -r src/public dist/public && cp dist/client/app.js dist/public/app.js && cp src/db/schema.sql dist/db/schema.sql",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js"
   },

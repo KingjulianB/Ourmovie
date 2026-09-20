@@ -6,7 +6,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.client.json ./
 COPY src ./src
 RUN npm run build
 

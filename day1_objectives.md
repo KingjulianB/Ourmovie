@@ -206,7 +206,27 @@ Ajouté en cours de session.
 - [x] Squelette backend fonctionnel : DB (schéma + init), auth (register/login), salons (create/get), relais Socket.IO (protocole `join`/`state`/`play`/`pause`/`seek`/`chat` + anti-dérive toutes les 3s)
 - [x] Vérifié : `npm install` + compilation TypeScript passent localement (Node v24.11.1 disponible)
 
-**statut :** terminé — squelette initial commité, reste à écrire le frontend (hors scope aujourd'hui) et affiner l'auth/erreurs
+**statut :** terminé — squelette initial commité et affiné avec le frontend (Objectif G ci-dessous)
+
+---
+
+## Objectif G — Frontend V1 (connexion, salon, lecteur + chat)
+Ajouté en cours de session — le rythme du jour a permis de dépasser le simple squelette backend.
+
+- [x] Page de connexion/inscription (`src/public/index.html` + `src/client/app.ts`)
+- [x] Lobby : créer un salon (avec lien vidéo) ou en rejoindre un par code
+- [x] Vue salon : lecteur `<video>` HTML5 synchronisé (play/pause/seek relayés via Socket.IO, avec garde anti-boucle pour ne pas ré-émettre les événements déclenchés par un état reçu du serveur) + chat texte
+- [x] Client Socket.IO servi directement par le backend (`/socket.io/socket.io.js`) — pas de bundler, pas de dépendance frontend supplémentaire
+- [x] TypeScript client compilé séparément du backend (`tsconfig.client.json`, lib DOM) — nécessaire car le tsconfig backend n'a pas la lib DOM (partagé avec Node)
+- [x] **Vérifié bout en bout** : build propre, serveur démarré, script de test scripté avec deux clients Socket.IO réels (inscription/connexion, création de salon, join à deux, play → sync reçue par l'autre client, chat → reçu par l'autre client, leave → participants mis à jour) — tous les checks passent
+- [x] Bug trouvé et corrigé pendant la vérification : `broadcastState` était défini dans le scope d'une connexion Socket.IO, inaccessible depuis la boucle anti-dérive globale — remonté au niveau module
+
+**Limitations connues (assumées pour la V1) :**
+- Pas de vérification de session au démarrage du frontend : un token expiré échoue seulement à la première action (erreur affichée), pas de redirection automatique vers l'écran de connexion
+- L'URL vidéo est fixée à la création du salon, pas modifiable depuis l'interface une fois le salon créé
+- Vérification visuelle en navigateur non faite (le MCP chrome-devtools ne pouvait pas ouvrir de nouvel onglet isolé — nombreux processus Chrome déjà ouverts, risqué de les toucher) ; compensé par un test Socket.IO scripté de bout en bout qui couvre le même chemin fonctionnel
+
+**statut :** terminé — commité et poussé
 
 ---
 

@@ -2,10 +2,67 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ourmovie</title>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <h1>Ourmovie</h1>
-  <p>Backend opérationnel. Interface à construire (hors scope du squelette initial — voir day1_objectives.md).</p>
+  <header><h1>Ourmovie</h1></header>
+
+  <main>
+    <section id="auth-view">
+      <h2>Connexion</h2>
+      <form id="login-form">
+        <input name="username" placeholder="Nom d'utilisateur" required />
+        <input name="password" type="password" placeholder="Mot de passe" required />
+        <button type="submit">Se connecter</button>
+      </form>
+      <h2>Créer un compte</h2>
+      <form id="register-form">
+        <input name="username" placeholder="Nom d'utilisateur" required />
+        <input name="password" type="password" placeholder="Mot de passe (8+ caractères)" required minlength="8" />
+        <button type="submit">Créer un compte</button>
+      </form>
+      <p id="auth-error" class="error" hidden></p>
+    </section>
+
+    <section id="lobby-view" hidden>
+      <h2>Bonjour, <span id="lobby-username"></span></h2>
+      <div class="lobby-actions">
+        <form id="create-room-form">
+          <h3>Créer un salon</h3>
+          <input name="videoUrl" placeholder="Lien vidéo (mp4/HLS)" />
+          <button type="submit">Créer</button>
+        </form>
+        <form id="join-room-form">
+          <h3>Rejoindre un salon</h3>
+          <input name="code" placeholder="Code du salon" required />
+          <button type="submit">Rejoindre</button>
+        </form>
+      </div>
+      <p id="lobby-error" class="error" hidden></p>
+    </section>
+
+    <section id="room-view" hidden>
+      <div class="room-header">
+        <h2>Salon <span id="room-code"></span></h2>
+        <span id="room-participants"></span>
+        <button id="leave-room">Quitter</button>
+      </div>
+      <div class="room-body">
+        <video id="video" controls></video>
+        <aside class="chat">
+          <div id="chat-messages"></div>
+          <form id="chat-form">
+            <input id="chat-input" placeholder="Message..." autocomplete="off" />
+            <button type="submit">Envoyer</button>
+          </form>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

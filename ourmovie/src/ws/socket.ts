@@ -87,6 +87,14 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       broadcastState(io, roomCode);
     });
 
+    socket.on('leave', () => {
+      if (!currentRoomCode) return;
+      const roomCode = currentRoomCode;
+      socket.leave(roomCode);
+      currentRoomCode = null;
+      broadcastState(io, roomCode);
+    });
+
     socket.on('play', ({ position }: { position: number }) => updatePlayback({ paused: false, position }));
     socket.on('pause', ({ position }: { position: number }) => updatePlayback({ paused: true, position }));
     socket.on('seek', ({ position }: { position: number }) => updatePlayback({ position }));
