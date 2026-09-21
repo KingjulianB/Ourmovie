@@ -295,12 +295,18 @@ function renderQueue(queue: string[]) {
   });
 }
 
+const playerPane = document.getElementById('player-pane') as HTMLElement;
+
 window.ourmovie.onChatReceived(appendChatMessage);
 window.ourmovie.onVideosDetected(renderDetectedVideos);
 window.ourmovie.onSyncState((state) => {
   (document.getElementById('room-participants') as HTMLElement).textContent =
     state.participants.join(', ');
   renderQueue(state.queue ?? []);
+  // Le panneau lecteur n'apparaît (et ne prend de la place) que si une vidéo est
+  // réellement active — sinon il resterait un grand rectangle noir en permanence,
+  // écrasant la zone de navigation.
+  playerPane.hidden = !state.videoUrl;
 });
 window.ourmovie.onSyncError((message) => {
   setError('lobby-error', message || 'Erreur de synchronisation');

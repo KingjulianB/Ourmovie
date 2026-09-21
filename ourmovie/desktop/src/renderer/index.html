@@ -23,8 +23,10 @@
       preload="../preload-webview.js"
     ></webview>
 
-    <div id="player-header">Lecture synchronisée</div>
-    <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
+    <div id="player-pane" hidden>
+      <div id="player-header">Lecture synchronisée</div>
+      <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
+    </div>
   </div>
 
   <aside id="sidebar">
