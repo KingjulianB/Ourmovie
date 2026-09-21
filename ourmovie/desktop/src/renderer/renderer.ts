@@ -20,6 +20,13 @@ interface RoomState {
   participants: string[];
 }
 
+interface DetectedVideo {
+  id: number;
+  width: number;
+  height: number;
+  duration: number;
+}
+
 interface OurmovieBridge {
   joinRoom(payload: { serverUrl: string; token: string; roomCode: string }): void;
   leaveRoom(): void;
@@ -27,6 +34,8 @@ interface OurmovieBridge {
   onSyncState(callback: (state: RoomState) => void): void;
   onChatReceived(callback: (message: ChatMessage) => void): void;
   onSyncError(callback: (message: string) => void): void;
+  shareVideo(videoId: number): void;
+  onVideosDetected(callback: (videos: DetectedVideo[]) => void): void;
 }
 
 declare global {
@@ -221,7 +230,35 @@ function appendChatMessage(msg: ChatMessage) {
   container.scrollTop = container.scrollHeight;
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds) return '';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return ` · ${m}:${s}`;
+}
+
+function renderDetectedVideos(videos: DetectedVideo[]) {
+  const container = document.getElementById('detected-videos') as HTMLElement;
+  container.innerHTML = '';
+  if (videos.length === 0) {
+    container.textContent = 'Aucune vidéo détectée sur cette page.';
+    return;
+  }
+  for (const v of videos) {
+    const row = document.createElement('div');
+    row.className = 'detected-video-row';
+    const label = document.createElement('span');
+    label.textContent = `${v.width}×${v.height}${formatDuration(v.duration)}`;
+    const button = document.createElement('button');
+    button.textContent = 'Partager sur le salon';
+    button.addEventListener('click', () => window.ourmovie.shareVideo(v.id));
+    row.append(label, button);
+    container.appendChild(row);
+  }
+}
+
 window.ourmovie.onChatReceived(appendChatMessage);
+window.ourmovie.onVideosDetected(renderDetectedVideos);
 window.ourmovie.onSyncState((state) => {
   (document.getElementById('room-participants') as HTMLElement).textContent =
     state.participants.join(', ');

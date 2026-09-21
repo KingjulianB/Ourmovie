@@ -1,67 +1,101 @@
-// Injecté dans le <webview> (l'onglet de navigation réel). Détecte la balise <video> la
-// plus visible et la pilote — même principe qu'un content script d'extension (isolated
-// world : accès DOM à la page, mais ses propres scripts n'ont pas accès à require()).
-//
-// Ne gère plus la connexion Socket.IO directement : elle vit dans main.ts, pour survivre
-// à la navigation (ce script, lui, est détruit et recréé à chaque nouvelle page chargée
-// dans le <webview> — impossible d'y garder un état qui dure plus d'une page).
+// Injecté dans le <webview> (l'onglet de navigation réel). Détecte TOUTES les balises
+// <video> de la page (façon Internet Download Manager qui liste les flux détectés),
+// et attend soit un clic explicite "Partager" (côté navigation normale), soit un
+// signal "enable-auto-follow" (côté suivi automatique — la personne redirigée n'a
+// rien à cliquer, elle rejoint juste la vidéo déjà choisie par quelqu'un d'autre).
 import { ipcRenderer } from 'electron';
 
-let video: HTMLVideoElement | null = null;
-let suppressEvents = false;
-// Sur les sites très dynamiques (YouTube, SPA), l'élément <video> peut être
-// recréé/remplacé en interne plusieurs fois pour la MÊME vidéo (changement de
-// qualité, re-render React, etc.). Sans ce verrou, chaque remplacement serait
-// pris pour "une nouvelle vidéo" et repartagé au salon, remettant tout à zéro
-// en boucle (bug réel observé avec YouTube). On ne partage donc la source
-// qu'une seule fois par chargement de page.
-let sourceReported = false;
-
-function pickBestVideo(): HTMLVideoElement | null {
-  const videos = Array.from(document.querySelectorAll('video'));
-  if (videos.length === 0) return null;
-  return videos.reduce((best, candidate) => {
-    const bestArea = best.clientWidth * best.clientHeight;
-    const candidateArea = candidate.clientWidth * candidate.clientHeight;
-    return candidateArea > bestArea ? candidate : best;
-  });
+interface DetectedVideo {
+  id: number;
+  width: number;
+  height: number;
+  duration: number;
 }
+
+let nextId = 1;
+const videoRegistry = new Map<number, HTMLVideoElement>();
+let sharedVideo: HTMLVideoElement | null = null;
+let suppressEvents = false;
+let autoFollowMode = false;
 
 function emit(type: 'play' | 'pause' | 'seek', position: number) {
   if (suppressEvents) return;
   ipcRenderer.send('local-video-event', { type, position });
 }
 
-function attach(v: HTMLVideoElement) {
-  if (video === v) return;
-  video = v;
-  console.log('[ourmovie-preload] vidéo (ré)attachée sur', window.location.href);
-  if (!sourceReported) {
-    sourceReported = true;
-    ipcRenderer.send('local-video-source', window.location.href);
-  }
+function attachSharedVideo(v: HTMLVideoElement) {
+  if (sharedVideo === v) return;
+  sharedVideo = v;
   v.addEventListener('play', () => emit('play', v.currentTime));
   v.addEventListener('pause', () => emit('pause', v.currentTime));
   v.addEventListener('seeked', () => emit('seek', v.currentTime));
 }
 
-function trackVideo() {
-  const best = pickBestVideo();
-  if (best) attach(best);
+function pickBestVideo(elements: HTMLVideoElement[]): HTMLVideoElement | null {
+  if (elements.length === 0) return null;
+  return elements.reduce((best, candidate) =>
+    candidate.clientWidth * candidate.clientHeight > best.clientWidth * best.clientHeight ? candidate : best
+  );
 }
 
-trackVideo();
-setInterval(trackVideo, 1500); // beaucoup de sites (SPA) chargent la vidéo après coup
-
-ipcRenderer.on('apply-remote-playback', (_event, payload: { paused: boolean; position: number }) => {
-  if (!video) return;
+function applyRemotePlayback(payload: { paused: boolean; position: number }) {
+  if (!sharedVideo) return;
   suppressEvents = true;
-  if (Math.abs(video.currentTime - payload.position) > 1.5) {
-    video.currentTime = payload.position;
+  if (Math.abs(sharedVideo.currentTime - payload.position) > 1.5) {
+    sharedVideo.currentTime = payload.position;
   }
-  if (payload.paused && !video.paused) video.pause();
-  if (!payload.paused && video.paused) video.play().catch(() => {});
+  if (payload.paused && !sharedVideo.paused) sharedVideo.pause();
+  if (!payload.paused && sharedVideo.paused) sharedVideo.play().catch(() => {});
   setTimeout(() => {
     suppressEvents = false;
   }, 50);
+}
+
+function scanVideos() {
+  const found = Array.from(document.querySelectorAll('video'));
+
+  for (const [id, el] of [...videoRegistry.entries()]) {
+    if (!found.includes(el)) videoRegistry.delete(id);
+  }
+  for (const el of found) {
+    if (![...videoRegistry.values()].includes(el)) {
+      videoRegistry.set(nextId++, el);
+    }
+  }
+
+  // Mode suivi automatique : pas d'attente d'un clic, on s'attache dès qu'une vidéo
+  // apparaît (comme avant), pour que la personne redirigée n'ait rien à faire.
+  if (autoFollowMode && !sharedVideo && found.length > 0) {
+    attachSharedVideo(pickBestVideo(found)!);
+  }
+
+  const list: DetectedVideo[] = [...videoRegistry.entries()].map(([id, el]) => ({
+    id,
+    width: el.videoWidth || el.clientWidth,
+    height: el.videoHeight || el.clientHeight,
+    duration: Number.isFinite(el.duration) ? el.duration : 0,
+  }));
+  ipcRenderer.send('videos-detected', list);
+}
+
+scanVideos();
+setInterval(scanVideos, 1500); // beaucoup de sites (SPA) chargent la vidéo après coup
+
+// L'utilisateur a cliqué "Partager" sur une vidéo précise dans la liste détectée.
+ipcRenderer.on('share-video', (_event, videoId: number) => {
+  const el = videoRegistry.get(videoId);
+  if (!el) return;
+  attachSharedVideo(el);
+  ipcRenderer.send('local-video-source', window.location.href);
+});
+
+// Suivi automatique activé (navigation déclenchée par le salon, pas par l'utilisateur).
+ipcRenderer.on('enable-auto-follow', (_event, state: { paused: boolean; position: number }) => {
+  autoFollowMode = true;
+  scanVideos();
+  if (sharedVideo) applyRemotePlayback(state);
+});
+
+ipcRenderer.on('apply-remote-playback', (_event, payload: { paused: boolean; position: number }) => {
+  applyRemotePlayback(payload);
 });

@@ -86,6 +86,29 @@ webview {
   font-size: 0.85rem;
 }
 
+#detected-videos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-block-end: 10px;
+}
+
+.detected-video-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  border: 1px solid #8883;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.detected-video-row button {
+  padding: 3px 8px;
+  font-size: 0.78rem;
+}
+
 .room-header {
   display: flex;
   align-items: center;

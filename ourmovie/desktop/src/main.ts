@@ -22,11 +22,21 @@ interface ChatMessage {
   ts: number;
 }
 
+interface DetectedVideo {
+  id: number;
+  width: number;
+  height: number;
+  duration: number;
+}
+
 let mainWindow: BrowserWindow;
 let webviewContents: WebContents | null = null;
 let socket: Socket | null = null;
 let lastState: RoomState | null = null;
 let knownVideoUrl: string | null = null;
+// true si la prochaine navigation du <webview> est déclenchée par NOUS (suivi
+// automatique d'une source partagée par quelqu'un d'autre), pas par l'utilisateur.
+let pendingAutoFollow = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -44,21 +54,21 @@ function createWindow(): void {
 
   mainWindow.webContents.on('did-attach-webview', (_event, contents) => {
     webviewContents = contents;
-    console.log('[ourmovie] webview attaché, webContents id =', contents.id);
-    // Chaque fois que la page du <webview> finit de charger (navigation utilisateur OU
-    // suivi automatique déclenché par nous), on lui redonne l'état de lecture courant —
-    // son propre script "preload" repart de zéro à chaque page, il n'a pas de mémoire.
+
+    // Chaque fois que la page du <webview> finit de charger, son script "preload"
+    // repart de zéro (pas de mémoire d'une page à l'autre). Deux cas :
+    // - navigation de suivi automatique (on vient d'appeler loadURL nous-mêmes) :
+    //   on dit au preload de s'attacher automatiquement à la meilleure vidéo trouvée ;
+    // - navigation normale de l'utilisateur : on ne fait rien de spécial, le preload va
+    //   juste scanner et remonter la liste des vidéos détectées (bouton "Partager").
     contents.on('did-finish-load', () => {
-      console.log('[ourmovie] webview did-finish-load, url =', contents.getURL());
-      if (lastState) {
-        contents.send('apply-remote-playback', { paused: lastState.paused, position: lastState.position });
+      if (pendingAutoFollow && lastState) {
+        pendingAutoFollow = false;
+        contents.send('enable-auto-follow', { paused: lastState.paused, position: lastState.position });
       }
     });
     contents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
       console.error('[ourmovie] webview did-fail-load', { errorCode, errorDescription, validatedURL });
-    });
-    contents.on('console-message', (_e, _level, message) => {
-      console.log('[webview console]', message);
     });
   });
 }
@@ -74,30 +84,28 @@ app.on('activate', () => {
 });
 
 ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; roomCode: string }) => {
-  console.log('[ourmovie] join-room', payload.serverUrl, payload.roomCode);
   socket?.close();
   knownVideoUrl = null;
   lastState = null;
 
   socket = io(payload.serverUrl, { auth: { token: payload.token } });
 
-  socket.on('connect', () => {
-    console.log('[ourmovie] socket connecté, emit join');
-    socket!.emit('join', { roomCode: payload.roomCode });
-  });
+  socket.on('connect', () => socket!.emit('join', { roomCode: payload.roomCode }));
   socket.on('connect_error', (err) => console.error('[ourmovie] connect_error', err.message));
 
   socket.on('state', (state: RoomState) => {
-    console.log('[ourmovie] state reçu', state, 'knownVideoUrl =', knownVideoUrl, 'webviewContents =', Boolean(webviewContents));
     lastState = state;
     mainWindow.webContents.send('sync-state', state);
 
     if (state.videoUrl && state.videoUrl !== knownVideoUrl) {
-      // Nouvelle source (la nôtre ou celle de quelqu'un d'autre) : on (re)navigue dessus.
-      // Si c'est déjà la page affichée, loadURL est un no-op silencieux.
+      // Nouvelle source (la nôtre ou celle de quelqu'un d'autre) : on (re)navigue dessus
+      // en mode "suivi automatique" — la personne qui reçoit n'a rien à cliquer.
       knownVideoUrl = state.videoUrl;
-      console.log('[ourmovie] navigation du webview vers', state.videoUrl);
-      webviewContents?.loadURL(state.videoUrl).catch((err) => console.error('[ourmovie] loadURL a échoué', err));
+      pendingAutoFollow = true;
+      webviewContents?.loadURL(state.videoUrl).catch((err) => {
+        pendingAutoFollow = false;
+        console.error('[ourmovie] loadURL a échoué', err);
+      });
     } else {
       webviewContents?.send('apply-remote-playback', { paused: state.paused, position: state.position });
     }
@@ -105,7 +113,6 @@ ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; ro
 
   socket.on('chat', (msg: ChatMessage) => mainWindow.webContents.send('chat-received', msg));
   socket.on('error', (err: { message: string }) => {
-    console.error('[ourmovie] erreur socket', err.message);
     mainWindow.webContents.send('sync-error', err.message);
   });
 });
@@ -128,12 +135,21 @@ ipcMain.on('local-video-event', (_event, payload: { type: 'play' | 'pause' | 'se
   socket.emit(payload.type, { position: payload.position });
 });
 
-// Reçu depuis le preload du <webview> : une vidéo vient d'être détectée sur la page —
-// on la propose comme nouvelle source du salon (seulement si vraiment nouvelle, pour
-// éviter une boucle avec la redirection déclenchée par le "state" ci-dessus).
+// Reçu depuis le preload : la vidéo choisie par l'utilisateur (bouton "Partager")
+// devient la source du salon.
 ipcMain.on('local-video-source', (_event, url: string) => {
-  console.log('[ourmovie] local-video-source reçu du webview', url, 'socket connecté =', Boolean(socket));
   if (!socket || url === knownVideoUrl) return;
   knownVideoUrl = url;
   socket.emit('set-source', { url });
+});
+
+// Reçu depuis le preload : liste des vidéos détectées sur la page courante — relayé
+// au panneau app pour afficher les boutons "Partager".
+ipcMain.on('videos-detected', (_event, videos: DetectedVideo[]) => {
+  mainWindow.webContents.send('videos-detected', videos);
+});
+
+// Reçu depuis le panneau app : l'utilisateur a cliqué "Partager" sur une vidéo précise.
+ipcMain.on('share-video', (_event, videoId: number) => {
+  webviewContents?.send('share-video', videoId);
 });
