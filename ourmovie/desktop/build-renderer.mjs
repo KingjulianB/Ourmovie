@@ -18,3 +18,6 @@ await esbuild.build({
 mkdirSync('dist/renderer', { recursive: true });
 copyFileSync('src/renderer/index.html', 'dist/renderer/index.html');
 copyFileSync('src/renderer/renderer.css', 'dist/renderer/renderer.css');
+
+mkdirSync('dist/theater', { recursive: true });
+copyFileSync('src/theater/index.html', 'dist/theater/index.html');
