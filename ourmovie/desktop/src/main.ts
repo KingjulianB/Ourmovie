@@ -145,8 +145,15 @@ async function scanBrowseIframes(): Promise<void> {
 }
 
 function setSource(url: string) {
-  if (!socket || url === knownVideoUrl) return;
-  knownVideoUrl = url;
+  // Ne PAS mettre à jour knownVideoUrl ici (bug réel corrigé — cf. OURMOVIE-FIX-LOG.md) :
+  // si on le faisait, la personne qui partage ne verrait jamais son propre lecteur
+  // naviguer, puisque le "state" renvoyé par le serveur (identique à ce qu'on vient
+  // d'envoyer) ne serait alors plus perçu comme "nouveau" côté client. knownVideoUrl
+  // n'est mis à jour qu'à un seul endroit : la réception du "state" confirmé par le
+  // serveur (socket.on('state', ...) ci-dessous) — pour tout le monde, y compris
+  // l'émetteur. Le serveur a son propre garde-fou contre les doublons, donc pas besoin
+  // de dédoublonner ici non plus.
+  if (!socket) return;
   socket.emit('set-source', { url });
 }
 
