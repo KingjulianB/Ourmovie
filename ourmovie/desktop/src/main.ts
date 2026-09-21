@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, WebContents, WebFrameMain } from 'electron';
 import path from 'node:path';
 import { io, Socket } from 'socket.io-client';
 
@@ -29,6 +29,15 @@ interface DetectedVideo {
   duration: number;
 }
 
+interface FrameVideoInfo {
+  id: number;
+  width: number;
+  height: number;
+  duration: number;
+  paused: boolean;
+  currentTime: number;
+}
+
 let mainWindow: BrowserWindow;
 let webviewContents: WebContents | null = null;
 let socket: Socket | null = null;
@@ -37,6 +46,159 @@ let knownVideoUrl: string | null = null;
 // true si la prochaine navigation du <webview> est déclenchée par NOUS (suivi
 // automatique d'une source partagée par quelqu'un d'autre), pas par l'utilisateur.
 let pendingAutoFollow = false;
+
+// --- Détection/contrôle dans les iframes (au-delà de la frame principale, qui elle est
+// couverte par preload-webview.ts) ---
+// Un content script/preload classique ne peut pas accéder au DOM d'une iframe cross-origin
+// (barrière de sécurité navigateur) — mais Electron, en tant qu'hôte du moteur Chromium,
+// le peut via WebFrameMain.executeJavaScript, quelle que soit l'origine de la frame.
+const IFRAME_ID_BASE = 1_000_000;
+let iframeList: WebFrameMain[] = [];
+let mainFrameVideos: DetectedVideo[] = [];
+let iframeVideos: DetectedVideo[] = [];
+let iframeShare: { frame: WebFrameMain; index: number } | null = null;
+let iframePollTimer: ReturnType<typeof setInterval> | null = null;
+let lastIframeState: { paused: boolean; currentTime: number } | null = null;
+let suppressIframePoll = false;
+
+const IFRAME_SCAN_SCRIPT = `(function() {
+  function collect(root, into) {
+    Array.prototype.forEach.call(root.querySelectorAll('video'), function(v) {
+      if (into.indexOf(v) === -1) into.push(v);
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('*'), function(el) {
+      if (el.shadowRoot) collect(el.shadowRoot, into);
+    });
+  }
+  var found = [];
+  collect(document, found);
+  window.__ourmovieVideos = found;
+  return found.map(function(v, i) {
+    return {
+      id: i,
+      width: v.videoWidth || v.clientWidth,
+      height: v.videoHeight || v.clientHeight,
+      duration: isFinite(v.duration) ? v.duration : 0,
+      paused: v.paused,
+      currentTime: v.currentTime
+    };
+  });
+})()`;
+
+function iframePollScript(index: number): string {
+  return `(function() {
+    var v = window.__ourmovieVideos && window.__ourmovieVideos[${index}];
+    if (!v) return null;
+    return { paused: v.paused, currentTime: v.currentTime };
+  })()`;
+}
+
+function iframeControlScript(index: number, paused: boolean, position: number): string {
+  return `(function() {
+    var v = window.__ourmovieVideos && window.__ourmovieVideos[${index}];
+    if (!v) return;
+    if (Math.abs(v.currentTime - ${JSON.stringify(position)}) > 1.5) v.currentTime = ${JSON.stringify(position)};
+    if (${JSON.stringify(paused)} && !v.paused) v.pause();
+    if (!${JSON.stringify(paused)} && v.paused) v.play().catch(function(){});
+  })()`;
+}
+
+async function scanIframes(): Promise<void> {
+  if (!webviewContents) return;
+  const frames = webviewContents.mainFrame.framesInSubtree.filter((f) => f !== webviewContents!.mainFrame);
+  iframeList = frames;
+
+  const results: DetectedVideo[] = [];
+  for (let frameIndex = 0; frameIndex < frames.length; frameIndex++) {
+    try {
+      const info = (await frames[frameIndex].executeJavaScript(IFRAME_SCAN_SCRIPT)) as FrameVideoInfo[] | null;
+      if (!info) continue;
+      for (const v of info) {
+        results.push({
+          id: IFRAME_ID_BASE + frameIndex * 1000 + v.id,
+          width: v.width,
+          height: v.height,
+          duration: v.duration,
+        });
+      }
+    } catch {
+      // Frame détachée/navigation en cours entre deux scans — ignorée pour ce tour.
+    }
+  }
+  iframeVideos = results;
+  sendDetectedVideos();
+}
+
+function sendDetectedVideos() {
+  mainWindow?.webContents.send('videos-detected', [...mainFrameVideos, ...iframeVideos]);
+}
+
+function decodeIframeId(id: number): { frameIndex: number; localIndex: number } | null {
+  if (id < IFRAME_ID_BASE) return null;
+  const rest = id - IFRAME_ID_BASE;
+  return { frameIndex: Math.floor(rest / 1000), localIndex: rest % 1000 };
+}
+
+function setSource(url: string) {
+  if (!socket || url === knownVideoUrl) return;
+  knownVideoUrl = url;
+  socket.emit('set-source', { url });
+}
+
+function startIframeShare(videoId: number) {
+  const decoded = decodeIframeId(videoId);
+  if (!decoded) return;
+  const frame = iframeList[decoded.frameIndex];
+  if (!frame) return;
+  stopIframeShare();
+  iframeShare = { frame, index: decoded.localIndex };
+  lastIframeState = null;
+  if (webviewContents) setSource(webviewContents.getURL());
+  iframePollTimer = setInterval(pollIframeVideo, 1000);
+}
+
+function stopIframeShare() {
+  if (iframePollTimer) clearInterval(iframePollTimer);
+  iframePollTimer = null;
+  iframeShare = null;
+  lastIframeState = null;
+}
+
+async function pollIframeVideo() {
+  if (!iframeShare || !socket) return;
+  try {
+    const result = (await iframeShare.frame.executeJavaScript(iframePollScript(iframeShare.index))) as {
+      paused: boolean;
+      currentTime: number;
+    } | null;
+    if (!result) return;
+    if (suppressIframePoll) {
+      lastIframeState = result;
+      return;
+    }
+    if (!lastIframeState) {
+      lastIframeState = result;
+      return;
+    }
+    if (result.paused !== lastIframeState.paused) {
+      socket.emit(result.paused ? 'pause' : 'play', { position: result.currentTime });
+    } else if (Math.abs(result.currentTime - lastIframeState.currentTime) > 1.5) {
+      socket.emit('seek', { position: result.currentTime });
+    }
+    lastIframeState = result;
+  } catch {
+    // frame disparue entre deux sondages — on arrêtera au prochain scan si besoin
+  }
+}
+
+function applyRemoteToIframeShare(paused: boolean, position: number) {
+  if (!iframeShare) return;
+  suppressIframePoll = true;
+  iframeShare.frame.executeJavaScript(iframeControlScript(iframeShare.index, paused, position)).catch(() => {});
+  setTimeout(() => {
+    suppressIframePoll = false;
+  }, 300);
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -62,15 +224,21 @@ function createWindow(): void {
     // - navigation normale de l'utilisateur : on ne fait rien de spécial, le preload va
     //   juste scanner et remonter la liste des vidéos détectées (bouton "Partager").
     contents.on('did-finish-load', () => {
+      mainFrameVideos = [];
+      iframeVideos = [];
+      stopIframeShare();
       if (pendingAutoFollow && lastState) {
         pendingAutoFollow = false;
         contents.send('enable-auto-follow', { paused: lastState.paused, position: lastState.position });
       }
+      void scanIframes();
     });
     contents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
       console.error('[ourmovie] webview did-fail-load', { errorCode, errorDescription, validatedURL });
     });
   });
+
+  setInterval(() => void scanIframes(), 2000);
 }
 
 app.whenReady().then(createWindow);
@@ -87,6 +255,7 @@ ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; ro
   socket?.close();
   knownVideoUrl = null;
   lastState = null;
+  stopIframeShare();
 
   socket = io(payload.serverUrl, { auth: { token: payload.token } });
 
@@ -106,6 +275,8 @@ ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; ro
         pendingAutoFollow = false;
         console.error('[ourmovie] loadURL a échoué', err);
       });
+    } else if (iframeShare) {
+      applyRemoteToIframeShare(state.paused, state.position);
     } else {
       webviewContents?.send('apply-remote-playback', { paused: state.paused, position: state.position });
     }
@@ -123,33 +294,40 @@ ipcMain.on('leave-room', () => {
   socket = null;
   lastState = null;
   knownVideoUrl = null;
+  stopIframeShare();
 });
 
 ipcMain.on('send-chat', (_event, text: string) => {
   socket?.emit('chat', { message: text });
 });
 
-// Reçu depuis le preload du <webview> : l'utilisateur local a interagi avec SA vidéo.
+// Reçu depuis le preload du <webview> (vidéo de la frame principale) : l'utilisateur
+// local a interagi avec SA vidéo.
 ipcMain.on('local-video-event', (_event, payload: { type: 'play' | 'pause' | 'seek'; position: number }) => {
   if (!socket) return;
   socket.emit(payload.type, { position: payload.position });
 });
 
-// Reçu depuis le preload : la vidéo choisie par l'utilisateur (bouton "Partager")
-// devient la source du salon.
-ipcMain.on('local-video-source', (_event, url: string) => {
-  if (!socket || url === knownVideoUrl) return;
-  knownVideoUrl = url;
-  socket.emit('set-source', { url });
-});
+// Reçu depuis le preload : la vidéo choisie par l'utilisateur (bouton "Partager") dans
+// la frame principale devient la source du salon (même chemin que startIframeShare()
+// pour une vidéo d'iframe, via la fonction partagée setSource()).
+ipcMain.on('local-video-source', (_event, url: string) => setSource(url));
 
-// Reçu depuis le preload : liste des vidéos détectées sur la page courante — relayé
-// au panneau app pour afficher les boutons "Partager".
+// Reçu depuis le preload : liste des vidéos détectées dans la frame principale —
+// fusionnée avec celles des iframes (scanIframes) avant d'être envoyée au panneau app.
 ipcMain.on('videos-detected', (_event, videos: DetectedVideo[]) => {
-  mainWindow.webContents.send('videos-detected', videos);
+  mainFrameVideos = videos;
+  sendDetectedVideos();
 });
 
-// Reçu depuis le panneau app : l'utilisateur a cliqué "Partager" sur une vidéo précise.
+// Reçu depuis le panneau app : l'utilisateur a cliqué "Partager" sur une vidéo précise —
+// soit une vidéo de la frame principale (relayée au preload), soit d'une iframe (gérée
+// directement ici via WebFrameMain, cf. startIframeShare).
 ipcMain.on('share-video', (_event, videoId: number) => {
-  webviewContents?.send('share-video', videoId);
+  if (videoId >= IFRAME_ID_BASE) {
+    startIframeShare(videoId);
+  } else {
+    stopIframeShare();
+    webviewContents?.send('share-video', videoId);
+  }
 });

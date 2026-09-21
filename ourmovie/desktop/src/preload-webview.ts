@@ -51,8 +51,27 @@ function applyRemotePlayback(payload: { paused: boolean; position: number }) {
   }, 50);
 }
 
+// Beaucoup de lecteurs modernes encapsulent leur <video> dans un web component avec
+// Shadow DOM — querySelectorAll('video') seul ne le traverse pas. On descend donc
+// récursivement dans chaque shadow root OUVERT rencontré (un shadow root "closed" est
+// délibérément inaccessible en JS, aucun moyen de le contourner).
+function collectVideos(root: Document | ShadowRoot, into: HTMLVideoElement[]) {
+  root.querySelectorAll('video').forEach((v) => {
+    if (!into.includes(v)) into.push(v);
+  });
+  root.querySelectorAll('*').forEach((el) => {
+    if (el.shadowRoot) collectVideos(el.shadowRoot, into);
+  });
+}
+
+function findAllVideos(): HTMLVideoElement[] {
+  const found: HTMLVideoElement[] = [];
+  collectVideos(document, found);
+  return found;
+}
+
 function scanVideos() {
-  const found = Array.from(document.querySelectorAll('video'));
+  const found = findAllVideos();
 
   for (const [id, el] of [...videoRegistry.entries()]) {
     if (!found.includes(el)) videoRegistry.delete(id);
