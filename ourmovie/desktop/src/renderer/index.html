@@ -32,6 +32,12 @@
       </div>
       <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
     </div>
+
+    <!-- Visible seulement pendant qu'une vidéo joue : bascule entre "plein lecteur" et
+         "navigation pour chercher la prochaine vidéo", sans jamais couper la lecture
+         (le <webview> masqué en display:none continue de jouer en arrière-plan). -->
+    <button id="open-browse-btn" class="fab" title="Chercher une nouvelle vidéo" hidden>+</button>
+    <button id="back-to-player-btn" class="fab" title="Retour au lecteur" hidden>▶</button>
   </div>
 
   <aside id="sidebar">

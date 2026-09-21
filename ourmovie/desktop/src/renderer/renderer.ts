@@ -339,6 +339,31 @@ function renderParticipants(participants: string[]) {
   }
 }
 
+// --- Bascule navigation / lecteur pendant qu'une vidéo joue ---
+// Dès qu'une vidéo démarre, le navigateur disparaît et le lecteur prend toute la
+// place. Le bouton "+" le fait réapparaître (pour chercher la vidéo suivante) sans
+// jamais couper la lecture en cours (le <webview> masqué continue de jouer).
+const openBrowseBtn = document.getElementById('open-browse-btn') as HTMLButtonElement;
+const backToPlayerBtn = document.getElementById('back-to-player-btn') as HTMLButtonElement;
+let hasActiveVideo = false;
+let showingBrowse = true;
+
+function applyFocusMode() {
+  document.body.classList.toggle('focus-player', hasActiveVideo && !showingBrowse);
+  document.body.classList.toggle('focus-browse', hasActiveVideo && showingBrowse);
+  openBrowseBtn.hidden = !(hasActiveVideo && !showingBrowse);
+  backToPlayerBtn.hidden = !(hasActiveVideo && showingBrowse);
+}
+
+openBrowseBtn.addEventListener('click', () => {
+  showingBrowse = true;
+  applyFocusMode();
+});
+backToPlayerBtn.addEventListener('click', () => {
+  showingBrowse = false;
+  applyFocusMode();
+});
+
 window.ourmovie.onChatReceived(appendChatMessage);
 window.ourmovie.onVideosDetected(renderDetectedVideos);
 window.ourmovie.onSyncState((state) => {
@@ -351,6 +376,12 @@ window.ourmovie.onSyncState((state) => {
   if (state.videoUrl) {
     (document.getElementById('now-playing-url') as HTMLElement).textContent = shortenUrl(state.videoUrl);
   }
+
+  const videoJustStarted = Boolean(state.videoUrl) && !hasActiveVideo;
+  hasActiveVideo = Boolean(state.videoUrl);
+  if (videoJustStarted) showingBrowse = false; // bascule auto vers le lecteur au démarrage
+  if (!hasActiveVideo) showingBrowse = true; // plus de vidéo (salon vidé) : retour navigation
+  applyFocusMode();
 });
 window.ourmovie.onSyncError((message) => {
   setError('lobby-error', message || 'Erreur de synchronisation');
