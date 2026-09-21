@@ -1,31 +1,77 @@
+/* Thème sombre original pour Ourmovie — inspiré de patterns d'interface génériques
+   (barre d'outils à icônes, bandeau "en cours de lecture", chat latéral, lien
+   d'invitation), pas d'un branding ou d'assets d'un produit tiers en particulier. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   font-family: system-ui, sans-serif;
+  --bg: #121014;
+  --bg-raised: #1c1a20;
+  --border: #ffffff1a;
+  --text: #f2f0f5;
+  --text-dim: #9c98a6;
+  --accent: #8b5cf6;
+  --accent-hover: #7c4de0;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 html, body {
   margin: 0;
   height: 100%;
-  display: flex; /* navigateur+lecteur à gauche, panneau app à droite */
+  display: flex;
+  background: var(--bg);
+  color: var(--text);
 }
 
 #left {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column; /* barre d'adresse, navigateur, puis lecteur, empilés */
+  flex-direction: column;
 }
 
 #toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid #8883;
+  padding: 8px 12px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
 }
 
-#toolbar button {
-  padding: 4px 8px;
+.icon-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.icon-btn:hover {
+  background: #ffffff12;
+}
+
+.ghost-btn {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.ghost-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 #nav-form {
@@ -34,14 +80,20 @@ html, body {
 
 #address-bar {
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 14px;
-  border: 1px solid #8886;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* Navigateur (chercher la prochaine vidéo) : prend toute la hauteur disponible tant
-   qu'aucune vidéo n'est partagée. Dès qu'une vidéo joue, #player-pane apparaît et prend
-   sa part — voir renderer.ts (toggle du [hidden] sur onSyncState). */
+#toolbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  padding-inline: 4px;
+}
+
 #browse-view {
   flex: 1;
   min-height: 0;
@@ -52,6 +104,7 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  border-top: 2px solid var(--accent);
 }
 
 #player-pane[hidden] {
@@ -59,11 +112,23 @@ html, body {
 }
 
 #player-header {
-  padding: 4px 10px;
-  font-size: 0.75rem;
-  color: #888;
-  border-block: 1px solid #8883;
-  background: #8881;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  background: var(--bg-raised);
+}
+
+#now-playing-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#now-playing-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #player-view {
@@ -73,23 +138,33 @@ html, body {
 }
 
 #sidebar {
-  width: 320px;
+  width: 340px;
   flex-shrink: 0;
-  padding: 12px;
-  border-left: 1px solid #8883;
+  padding: 14px;
+  background: var(--bg-raised);
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 #sidebar header h1 {
-  font-size: 1.1rem;
-  margin: 0 0 8px;
+  font-size: 1.15rem;
+  margin: 0 0 10px;
+  color: var(--accent);
 }
 
 #sidebar h2 {
   font-size: 0.95rem;
   margin: 12px 0 6px;
+}
+
+#sidebar h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin: 14px 0 6px;
 }
 
 #sidebar form {
@@ -99,20 +174,88 @@ html, body {
   margin-block-end: 10px;
 }
 
-#sidebar input, #sidebar button {
-  padding: 6px;
+#sidebar input {
+  padding: 7px 10px;
   font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+#sidebar form button[type='submit'] {
+  padding: 7px 10px;
+  font-size: 0.9rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#sidebar form button[type='submit']:hover {
+  background: var(--accent-hover);
 }
 
 .hint {
   font-size: 0.78rem;
-  color: #888;
+  color: var(--text-dim);
   margin: 4px 0;
 }
 
 .error {
-  color: #d33;
+  color: #f87171;
   font-size: 0.85rem;
+}
+
+#invite-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-block-end: 10px;
+}
+
+.invite-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.invite-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+
+.invite-row code {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+#participants-row {
+  display: flex;
+  gap: 6px;
+  margin-block-end: 8px;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid var(--bg-raised);
 }
 
 #detected-videos {
@@ -128,20 +271,30 @@ html, body {
   justify-content: space-between;
   gap: 8px;
   font-size: 0.82rem;
-  border: 1px solid #8883;
-  border-radius: 6px;
-  padding: 4px 8px;
-}
-
-.detected-video-row button {
-  padding: 3px 8px;
-  font-size: 0.78rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
 }
 
 .detected-video-row .actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+}
+
+.detected-video-row button {
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.detected-video-row button:hover {
+  border-color: var(--accent);
 }
 
 #queue-list {
@@ -153,9 +306,10 @@ html, body {
 
 .queue-row {
   font-size: 0.78rem;
-  border: 1px solid #8883;
-  border-radius: 6px;
-  padding: 3px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -172,22 +326,38 @@ html, body {
   flex: 1;
   min-height: 120px;
   overflow-y: auto;
-  border: 1px solid #8883;
-  border-radius: 6px;
-  padding: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
   margin: 8px 0;
   font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .chat-line {
-  margin-block-end: 3px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  background: var(--bg-raised);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.chat-line strong {
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 #chat-form {
   flex-direction: row;
   margin: 0;
+  gap: 6px;
 }
 
 #chat-input {
   flex: 1;
+  border-radius: 999px !important;
 }

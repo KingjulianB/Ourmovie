@@ -8,12 +8,13 @@
 <body>
   <div id="left">
     <div id="toolbar">
-      <button id="nav-back" title="Précédent">←</button>
-      <button id="nav-forward" title="Suivant">→</button>
-      <button id="nav-reload" title="Recharger">⟳</button>
+      <button id="nav-back" title="Précédent" class="icon-btn">←</button>
+      <button id="nav-forward" title="Suivant" class="icon-btn">→</button>
+      <button id="nav-reload" title="Recharger" class="icon-btn">⟳</button>
       <form id="nav-form">
-        <input id="address-bar" placeholder="Aller à... (ex: netflix.com)" />
+        <input id="address-bar" placeholder="Rechercher ou aller à une adresse..." />
       </form>
+      <div id="toolbar-brand">Ourmovie</div>
     </div>
 
     <webview
@@ -24,7 +25,10 @@
     ></webview>
 
     <div id="player-pane" hidden>
-      <div id="player-header">Lecture synchronisée</div>
+      <div id="player-header">
+        <span id="now-playing-label">▶ En cours de lecture</span>
+        <span id="now-playing-url" class="hint"></span>
+      </div>
       <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
     </div>
   </div>
@@ -60,7 +64,7 @@
     <section id="lobby-view" hidden>
       <div class="room-header">
         <h2>Salon</h2>
-        <button id="logout">Se déconnecter</button>
+        <button id="logout" class="ghost-btn">Se déconnecter</button>
       </div>
       <form id="create-room-form">
         <p class="hint">Navigue d'abord vers la vidéo à regarder, puis crée le salon.</p>
@@ -75,10 +79,19 @@
 
     <section id="room-view" hidden>
       <div class="room-header">
-        <h2>Salon <span id="room-code"></span></h2>
-        <button id="leave-room">Quitter</button>
+        <h2>Salon</h2>
+        <button id="leave-room" class="ghost-btn">Quitter</button>
       </div>
-      <p id="room-participants" class="hint"></p>
+
+      <div id="invite-card">
+        <div class="invite-label">Lien d'invitation</div>
+        <div class="invite-row">
+          <code id="room-code"></code>
+          <button id="copy-room-code" class="ghost-btn" title="Copier le code">Copier</button>
+        </div>
+      </div>
+
+      <div id="participants-row"></div>
 
       <h3>Vidéos détectées sur cette page</h3>
       <div id="detected-videos" class="hint">Aucune vidéo détectée sur cette page.</div>
@@ -88,8 +101,8 @@
 
       <div id="chat-messages"></div>
       <form id="chat-form">
-        <input id="chat-input" placeholder="Message..." autocomplete="off" />
-        <button type="submit">Envoyer</button>
+        <input id="chat-input" placeholder="Écrire un message..." autocomplete="off" />
+        <button type="submit" class="icon-btn" title="Envoyer">➤</button>
       </form>
     </section>
   </aside>

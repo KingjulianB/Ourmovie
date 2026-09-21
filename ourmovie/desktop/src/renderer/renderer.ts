@@ -205,6 +205,21 @@ function enterRoom(code: string) {
   window.ourmovie.joinRoom({ serverUrl, token: token as string, roomCode: code });
 }
 
+document.getElementById('copy-room-code')!.addEventListener('click', async () => {
+  const code = (document.getElementById('room-code') as HTMLElement).textContent ?? '';
+  const btn = document.getElementById('copy-room-code') as HTMLButtonElement;
+  try {
+    await navigator.clipboard.writeText(code);
+    const original = btn.textContent;
+    btn.textContent = 'Copié !';
+    setTimeout(() => {
+      btn.textContent = original;
+    }, 1500);
+  } catch {
+    // presse-papiers indisponible (rare) — pas bloquant, le code reste visible à l'écran
+  }
+});
+
 document.getElementById('leave-room')!.addEventListener('click', () => {
   window.ourmovie.leaveRoom();
   showView('lobby');
@@ -297,16 +312,31 @@ function renderQueue(queue: string[]) {
 
 const playerPane = document.getElementById('player-pane') as HTMLElement;
 
+function renderParticipants(participants: string[]) {
+  const container = document.getElementById('participants-row') as HTMLElement;
+  container.innerHTML = '';
+  container.title = participants.join(', ');
+  for (const name of participants) {
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = (name[0] ?? '?').toUpperCase();
+    avatar.title = name;
+    container.appendChild(avatar);
+  }
+}
+
 window.ourmovie.onChatReceived(appendChatMessage);
 window.ourmovie.onVideosDetected(renderDetectedVideos);
 window.ourmovie.onSyncState((state) => {
-  (document.getElementById('room-participants') as HTMLElement).textContent =
-    state.participants.join(', ');
+  renderParticipants(state.participants);
   renderQueue(state.queue ?? []);
   // Le panneau lecteur n'apparaît (et ne prend de la place) que si une vidéo est
   // réellement active — sinon il resterait un grand rectangle noir en permanence,
   // écrasant la zone de navigation.
   playerPane.hidden = !state.videoUrl;
+  if (state.videoUrl) {
+    (document.getElementById('now-playing-url') as HTMLElement).textContent = shortenUrl(state.videoUrl);
+  }
 });
 window.ourmovie.onSyncError((message) => {
   setError('lobby-error', message || 'Erreur de synchronisation');
