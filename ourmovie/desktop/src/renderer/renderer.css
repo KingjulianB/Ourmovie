@@ -112,42 +112,63 @@ webview {
   padding-inline: 4px;
 }
 
-#browse-view {
+/* #stage superpose navigateur et lecteur au même endroit (position absolute), et on
+   bascule lequel est visible via opacity/pointer-events — JAMAIS via display:none une
+   fois qu'une vidéo a démarré. Electron a un vrai bug connu : un <webview> masqué en
+   display:none perd son rendu et revient en écran noir quand on le raffiche (constaté
+   par l'utilisateur). Avant qu'une vidéo ne démarre, #player-pane peut rester
+   display:none via [hidden] normalement (rien de significatif n'y est encore chargé). */
+#stage {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
 
-/* Une vidéo joue : le lecteur prend toute la place, le navigateur disparaît
-   complètement (voir renderer.ts, applyFocusMode) — le <webview> masqué continue de
-   jouer en arrière-plan (display:none n'arrête pas la lecture, contrairement à retirer
-   l'élément du DOM). */
-body.focus-player #toolbar,
-body.focus-player #browse-view {
-  display: none;
-}
-
-body.focus-player #player-pane {
-  flex: 1;
-  border-top: none;
-}
-
-/* Inversement : l'utilisateur a cliqué "+" pour chercher la prochaine vidéo — le
-   lecteur (qui continue de jouer, juste invisible) laisse toute la place au
-   navigateur. */
-body.focus-browse #player-pane {
-  display: none;
+#browse-view,
+#player-pane {
+  position: absolute;
+  inset: 0;
 }
 
 #player-pane {
-  flex: 0 0 42%;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  border-top: 2px solid var(--accent);
 }
 
 #player-pane[hidden] {
   display: none;
+}
+
+/* Une vidéo joue : le lecteur prend toute la place, le navigateur disparaît (mais
+   reste rendu en arrière-plan — voir le commentaire ci-dessus). */
+body.focus-player #toolbar {
+  display: none;
+}
+
+body.focus-player #browse-view {
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body.focus-player #player-pane {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Inversement : l'utilisateur a cliqué "+" pour chercher la prochaine vidéo — le
+   lecteur continue de jouer, juste recouvert par le navigateur. */
+body.focus-browse #browse-view {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+body.focus-browse #player-pane {
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .fab {

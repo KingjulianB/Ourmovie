@@ -17,20 +17,22 @@
       <div id="toolbar-brand">Ourmovie</div>
     </div>
 
-    <webview
-      id="browse-view"
-      src="https://www.google.com"
-      partition="persist:ourmovie-browse"
-      preload="../preload-webview.js"
-    ></webview>
+    <div id="stage">
+      <webview
+        id="browse-view"
+        src="https://www.google.com"
+        partition="persist:ourmovie-browse"
+        preload="../preload-webview.js"
+      ></webview>
 
-    <div id="player-pane" hidden>
-      <div id="player-header">
-        <span id="now-playing-label">▶ En cours de lecture</span>
-        <span id="now-playing-url" class="hint"></span>
-        <button id="fullscreen-toggle" class="icon-btn" title="Plein écran">⛶</button>
+      <div id="player-pane" hidden>
+        <div id="player-header">
+          <span id="now-playing-label">▶ En cours de lecture</span>
+          <span id="now-playing-url" class="hint"></span>
+          <button id="fullscreen-toggle" class="icon-btn" title="Plein écran">⛶</button>
+        </div>
+        <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
       </div>
-      <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
     </div>
 
     <!-- Visible seulement pendant qu'une vidéo joue : bascule entre "plein lecteur" et
