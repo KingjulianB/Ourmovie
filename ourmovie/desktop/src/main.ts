@@ -48,6 +48,12 @@ let knownVideoUrl: string | null = null;
 // true si la prochaine navigation de la fenêtre théâtre est déclenchée par NOUS (suivi
 // automatique d'une source partagée), pas par un clic utilisateur.
 let pendingTheaterAutoFollow = false;
+// URL à charger dans le <webview> théâtre dès qu'il s'attachera — nécessaire parce que
+// juste après avoir créé la fenêtre, son <webview> n'est pas encore attaché (course
+// entre la création de fenêtre et le rendu de theater/index.html) : sans cette file
+// d'attente, la navigation demandée était silencieusement perdue et l'écran restait
+// noir (bug réel observé — cf. OURMOVIE-FIX-LOG.md).
+let pendingTheaterUrl: string | null = null;
 
 // --- Détection/contrôle dans les iframes ---
 // Un script injecté dans une page ne peut pas voir le DOM d'une iframe cross-origin
@@ -234,6 +240,16 @@ function ensureTheaterWindow(): BrowserWindow {
 
   theaterWindow.webContents.on('did-attach-webview', (_event, contents) => {
     theaterWebview = contents;
+    // Le <webview> vient de s'attacher : s'il y avait une navigation en attente (voir
+    // navigateTheaterTo), c'est le bon moment pour l'appliquer enfin.
+    if (pendingTheaterUrl) {
+      const url = pendingTheaterUrl;
+      pendingTheaterUrl = null;
+      contents.loadURL(url).catch((err) => {
+        pendingTheaterAutoFollow = false;
+        console.error('[ourmovie] loadURL (théâtre, en attente) a échoué', err);
+      });
+    }
     contents.on('did-finish-load', () => {
       stopTheaterIframeShare();
       if (pendingTheaterAutoFollow && lastState) {
@@ -263,9 +279,11 @@ function navigateTheaterTo(url: string) {
       pendingTheaterAutoFollow = false;
       console.error('[ourmovie] loadURL (théâtre) a échoué', err);
     });
+  } else {
+    // Le <webview> n'est pas encore attaché (fenêtre tout juste créée) : on mémorise
+    // l'URL, appliquée dès que 'did-attach-webview' se déclenche (voir plus haut).
+    pendingTheaterUrl = url;
   }
-  // Si le <webview> n'est pas encore attaché (première ouverture de la fenêtre), son
-  // attribut src initial (voir theater/index.html) pointera déjà vers cette URL.
 }
 
 function createWindow(): void {
