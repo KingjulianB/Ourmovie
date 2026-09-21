@@ -254,6 +254,19 @@ function createWindow(): void {
       });
     } else if (contents.session === playerSession) {
       playerWebview = contents;
+      // Le bouton plein écran natif d'un site (YouTube, etc.) déclenche l'API Fullscreen
+      // HTML5 *dans* la page — sans ceci, ça restait coincé dans les 42% de hauteur du
+      // panneau lecteur (bug réel signalé par l'utilisateur, "écran mal géré"). On
+      // relaie l'événement au panneau app, qui fait vraiment passer le lecteur en plein
+      // écran (voir renderer.ts).
+      contents.on('enter-html-full-screen', () => {
+        mainWindow.setFullScreen(true);
+        mainWindow.webContents.send('player-fullscreen', true);
+      });
+      contents.on('leave-html-full-screen', () => {
+        mainWindow.setFullScreen(false);
+        mainWindow.webContents.send('player-fullscreen', false);
+      });
       if (pendingPlayerUrl) {
         const url = pendingPlayerUrl;
         pendingPlayerUrl = null;
@@ -369,4 +382,12 @@ ipcMain.on('play-now', (_event, videoId: number) => {
 ipcMain.on('queue-video', (_event, _videoId: number) => {
   if (!socket || !browseWebview) return;
   socket.emit('queue-video', { url: browseWebview.getURL() });
+});
+
+// Bouton plein écran de l'app (fiable, indépendant du bouton plein écran du site —
+// voir aussi enter/leave-html-full-screen ci-dessus pour le déclenchement automatique).
+ipcMain.on('toggle-fullscreen', () => {
+  const next = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(next);
+  mainWindow.webContents.send('player-fullscreen', next);
 });

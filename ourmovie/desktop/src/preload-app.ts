@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld('ourmovie', {
   onVideosDetected: (callback: (videos: unknown) => void) => {
     ipcRenderer.on('videos-detected', (_event, videos) => callback(videos));
   },
+  onPlayerFullscreen: (callback: (isFullscreen: boolean) => void) => {
+    ipcRenderer.on('player-fullscreen', (_event, isFullscreen) => callback(isFullscreen));
+  },
+  toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
 });

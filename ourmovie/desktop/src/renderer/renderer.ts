@@ -38,6 +38,8 @@ interface OurmovieBridge {
   playNow(videoId: number): void;
   queueVideo(videoId: number): void;
   onVideosDetected(callback: (videos: DetectedVideo[]) => void): void;
+  toggleFullscreen(): void;
+  onPlayerFullscreen(callback: (isFullscreen: boolean) => void): void;
 }
 
 declare global {
@@ -311,6 +313,18 @@ function renderQueue(queue: string[]) {
 }
 
 const playerPane = document.getElementById('player-pane') as HTMLElement;
+
+document.getElementById('fullscreen-toggle')!.addEventListener('click', () => {
+  window.ourmovie.toggleFullscreen();
+});
+window.ourmovie.onPlayerFullscreen((isFullscreen) => {
+  document.body.classList.toggle('fullscreen-mode', isFullscreen);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('fullscreen-mode')) {
+    window.ourmovie.toggleFullscreen();
+  }
+});
 
 function renderParticipants(participants: string[]) {
   const container = document.getElementById('participants-row') as HTMLElement;

@@ -126,15 +126,50 @@ html, body {
 }
 
 #now-playing-url {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#fullscreen-toggle {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
 }
 
 #player-view {
   flex: 1;
   min-height: 0;
   background: #000;
+}
+
+/* Plein écran (bouton app, ou propagé depuis le bouton plein écran natif du site —
+   voir main.ts, enter/leave-html-full-screen) : le lecteur occupe toute la fenêtre,
+   tout le reste disparaît. */
+body.fullscreen-mode #toolbar,
+body.fullscreen-mode #browse-view,
+body.fullscreen-mode #sidebar {
+  display: none;
+}
+
+body.fullscreen-mode #player-pane {
+  flex: 1;
+  border-top: none;
+}
+
+body.fullscreen-mode #player-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+body.fullscreen-mode #player-header:hover {
+  opacity: 1;
 }
 
 #sidebar {
