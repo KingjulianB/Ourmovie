@@ -8,6 +8,7 @@ export interface RoomState {
   paused: boolean;
   position: number;
   participants: string[];
+  queue: string[];
 }
 
 export interface ChatMessage {

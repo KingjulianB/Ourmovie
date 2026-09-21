@@ -13,3 +13,13 @@ export const db = new DatabaseSync(DB_PATH);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
 db.exec(schema);
+
+// Migration légère : la colonne `queue` a été ajoutée après coup (playlist). Pour une
+// base déjà existante créée avant ce changement, CREATE TABLE IF NOT EXISTS ne
+// l'ajoute pas tout seul — on la rajoute ici si absente. Pas de système de migration
+// formel pour l'instant vu la taille du projet ; ce garde-fou suffit.
+try {
+  db.exec(`ALTER TABLE rooms ADD COLUMN queue TEXT NOT NULL DEFAULT '[]'`);
+} catch {
+  // déjà présente (installation neuve, ou migration déjà appliquée) — rien à faire
+}

@@ -29,6 +29,8 @@ function attachSharedVideo(v: HTMLVideoElement) {
   v.addEventListener('play', () => emit('play', v.currentTime));
   v.addEventListener('pause', () => emit('pause', v.currentTime));
   v.addEventListener('seeked', () => emit('seek', v.currentTime));
+  // Fin naturelle de la vidéo : signale au serveur d'enchaîner avec la playlist.
+  v.addEventListener('ended', () => ipcRenderer.send('local-video-ended'));
 }
 
 function pickBestVideo(elements: HTMLVideoElement[]): HTMLVideoElement | null {

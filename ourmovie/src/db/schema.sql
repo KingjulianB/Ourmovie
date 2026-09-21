@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS rooms (
   video_url  TEXT,
   position   REAL NOT NULL DEFAULT 0,
   paused     INTEGER NOT NULL DEFAULT 1,
+  -- Playlist : liste JSON d'URLs en attente, ajoutées via "+ File d'attente" plutôt que
+  -- "Lire maintenant". Vidé un élément à la fois quand la vidéo en cours se termine.
+  queue      TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

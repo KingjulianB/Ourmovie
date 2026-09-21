@@ -1,5 +1,16 @@
 # Changelog — Ourmovie
 
+## 0.3.3 (2026-09-21)
+
+- **Nouveau : lecteur intégré à la fenêtre principale** (plus de fenêtre
+  "Lecture" séparée) — navigateur en haut, lecteur synchronisé en bas,
+  jamais interrompu par la navigation.
+- **Nouveau : playlist** — chaque vidéo détectée a deux boutons,
+  "▶ Maintenant" (remplace tout de suite) et "+ File" (ajoutée à la
+  suite, jouée automatiquement quand la vidéo en cours se termine).
+- Nouvel événement serveur `video-ended` + colonne `queue` sur les
+  salons (migration automatique pour les installations existantes).
+
 ## 0.3.2 (2026-09-21)
 
 - Correction : boucle de lecture sur YouTube (et sites SPA similaires)

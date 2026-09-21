@@ -1,12 +1,13 @@
-import { app, BrowserWindow, ipcMain, WebContents, WebFrameMain } from 'electron';
+import { app, BrowserWindow, ipcMain, session, WebContents, WebFrameMain } from 'electron';
 import path from 'node:path';
 import { io, Socket } from 'socket.io-client';
 
-// Architecture : une fenêtre "navigation" (chercher la prochaine vidéo, jamais
-// interrompue par la sync) + une fenêtre "théâtre" séparée et redimensionnable, qui
-// affiche et synchronise la vidéo réellement partagée au salon. La connexion Socket.IO
-// vit dans ce process principal (survit à toute navigation dans l'une ou l'autre
-// fenêtre) — voir les commits précédents pour le détail de ce choix.
+// Une seule fenêtre : navigation en haut (jamais interrompue), lecteur en bas
+// (synchronisé au salon), panneau app à droite. Les deux <webview> sont distingués par
+// leur `partition` (voir renderer/index.html) — Electron ne donne pas d'autre moyen
+// fiable de savoir laquelle s'attache dans 'did-attach-webview'.
+// La connexion Socket.IO vit dans ce process principal (survit à toute navigation dans
+// l'une ou l'autre <webview>) — voir les commits précédents pour ce choix.
 
 interface RoomState {
   roomCode: string;
@@ -14,6 +15,7 @@ interface RoomState {
   paused: boolean;
   position: number;
   participants: string[];
+  queue: string[];
 }
 
 interface ChatMessage {
@@ -38,29 +40,25 @@ interface FrameVideoInfo {
   currentTime: number;
 }
 
+const BROWSE_PARTITION = 'persist:ourmovie-browse';
+const PLAYER_PARTITION = 'persist:ourmovie-player';
+
 let mainWindow: BrowserWindow;
-let theaterWindow: BrowserWindow | null = null;
 let browseWebview: WebContents | null = null;
-let theaterWebview: WebContents | null = null;
+let playerWebview: WebContents | null = null;
 let socket: Socket | null = null;
 let lastState: RoomState | null = null;
 let knownVideoUrl: string | null = null;
-// true si la prochaine navigation de la fenêtre théâtre est déclenchée par NOUS (suivi
-// automatique d'une source partagée), pas par un clic utilisateur.
-let pendingTheaterAutoFollow = false;
-// URL à charger dans le <webview> théâtre dès qu'il s'attachera — nécessaire parce que
-// juste après avoir créé la fenêtre, son <webview> n'est pas encore attaché (course
-// entre la création de fenêtre et le rendu de theater/index.html) : sans cette file
-// d'attente, la navigation demandée était silencieusement perdue et l'écran restait
-// noir (bug réel observé — cf. OURMOVIE-FIX-LOG.md).
-let pendingTheaterUrl: string | null = null;
+// URL à charger dans le lecteur dès qu'il s'attachera, s'il ne l'est pas encore
+// (course possible juste après le démarrage de la fenêtre — cf. OURMOVIE-FIX-LOG.md).
+let pendingPlayerUrl: string | null = null;
+let pendingPlayerAutoFollow = false;
 
-// --- Détection/contrôle dans les iframes ---
-// Un script injecté dans une page ne peut pas voir le DOM d'une iframe cross-origin
-// (barrière de sécurité navigateur) — mais Electron, hôte du moteur Chromium, le peut
-// via WebFrameMain.executeJavaScript, quelle que soit l'origine de la frame. Utilisé à
-// la fois pour lister les vidéos détectées (fenêtre navigation, bouton "Partager") et
-// pour suivre automatiquement une vidéo d'iframe (fenêtre théâtre).
+// --- Détection/contrôle dans les iframes (au-delà de la frame principale d'une page,
+// couverte par preload-webview.ts) : un script injecté dans une page ne peut pas voir le
+// DOM d'une iframe cross-origin (barrière de sécurité navigateur), mais Electron, hôte
+// du moteur Chromium, le peut via WebFrameMain.executeJavaScript, quelle que soit
+// l'origine de la frame. ---
 const IFRAME_ID_BASE = 1_000_000;
 
 const IFRAME_SCAN_SCRIPT = `(function() {
@@ -128,7 +126,7 @@ function decodeIframeId(id: number): { frameIndex: number; localIndex: number } 
   return { frameIndex: Math.floor(rest / 1000), localIndex: rest % 1000 };
 }
 
-// --- Fenêtre navigation : détection + partage manuel (bouton "Partager") ---
+// --- Fenêtre navigation : détection (bouton "Maintenant" / "+ File d'attente") ---
 
 let browseIframeList: WebFrameMain[] = [];
 let browseMainFrameVideos: DetectedVideo[] = [];
@@ -152,144 +150,87 @@ function setSource(url: string) {
   socket.emit('set-source', { url });
 }
 
-function shareBrowseIframeVideo(videoId: number) {
-  const decoded = decodeIframeId(videoId);
-  if (!decoded) return;
-  const frame = browseIframeList[decoded.frameIndex];
-  if (!frame) return;
-  if (browseWebview) setSource(browseWebview.getURL());
-  // Le contrôle continu (play/pause/seek) de cette vidéo précise sera repris par la
-  // fenêtre théâtre une fois qu'elle aura navigué dessus (voir suivi ci-dessous) — la
-  // fenêtre navigation n'a pas besoin de sonder cette iframe en continu elle-même.
+// --- Lecteur : suivi automatique + lecture synchronisée (y compris dans une iframe) ---
+
+let playerIframeShare: { frame: WebFrameMain; index: number } | null = null;
+let playerIframePollTimer: ReturnType<typeof setInterval> | null = null;
+let playerLastIframeState: { paused: boolean; currentTime: number } | null = null;
+let suppressPlayerIframePoll = false;
+
+function stopPlayerIframeShare() {
+  if (playerIframePollTimer) clearInterval(playerIframePollTimer);
+  playerIframePollTimer = null;
+  playerIframeShare = null;
+  playerLastIframeState = null;
 }
 
-// --- Fenêtre théâtre : suivi automatique + lecture synchronisée ---
-
-let theaterIframeShare: { frame: WebFrameMain; index: number } | null = null;
-let theaterIframePollTimer: ReturnType<typeof setInterval> | null = null;
-let theaterLastIframeState: { paused: boolean; currentTime: number } | null = null;
-let suppressTheaterIframePoll = false;
-
-function stopTheaterIframeShare() {
-  if (theaterIframePollTimer) clearInterval(theaterIframePollTimer);
-  theaterIframePollTimer = null;
-  theaterIframeShare = null;
-  theaterLastIframeState = null;
-}
-
-async function pollTheaterIframeVideo() {
-  if (!theaterIframeShare || !socket) return;
+async function pollPlayerIframeVideo() {
+  if (!playerIframeShare || !socket) return;
   try {
-    const result = (await theaterIframeShare.frame.executeJavaScript(
-      iframePollScript(theaterIframeShare.index)
+    const result = (await playerIframeShare.frame.executeJavaScript(
+      iframePollScript(playerIframeShare.index)
     )) as { paused: boolean; currentTime: number } | null;
     if (!result) return;
-    if (suppressTheaterIframePoll || !theaterLastIframeState) {
-      theaterLastIframeState = result;
+    if (suppressPlayerIframePoll || !playerLastIframeState) {
+      playerLastIframeState = result;
       return;
     }
-    if (result.paused !== theaterLastIframeState.paused) {
+    if (result.paused !== playerLastIframeState.paused) {
       socket.emit(result.paused ? 'pause' : 'play', { position: result.currentTime });
-    } else if (Math.abs(result.currentTime - theaterLastIframeState.currentTime) > 1.5) {
+    } else if (Math.abs(result.currentTime - playerLastIframeState.currentTime) > 1.5) {
       socket.emit('seek', { position: result.currentTime });
     }
-    theaterLastIframeState = result;
+    playerLastIframeState = result;
   } catch {
     // frame disparue entre deux sondages
   }
 }
 
-function applyRemoteToTheaterIframe(paused: boolean, position: number) {
-  if (!theaterIframeShare) return;
-  suppressTheaterIframePoll = true;
-  theaterIframeShare.frame.executeJavaScript(iframeControlScript(theaterIframeShare.index, paused, position)).catch(() => {});
+function applyRemoteToPlayerIframe(paused: boolean, position: number) {
+  if (!playerIframeShare) return;
+  suppressPlayerIframePoll = true;
+  playerIframeShare.frame.executeJavaScript(iframeControlScript(playerIframeShare.index, paused, position)).catch(() => {});
   setTimeout(() => {
-    suppressTheaterIframePoll = false;
+    suppressPlayerIframePoll = false;
   }, 300);
 }
 
-// Après navigation de la fenêtre théâtre : si la vidéo attendue n'est pas dans la frame
-// principale (le preload ne l'aura pas trouvée), on cherche dans les iframes et on
-// bascule sur le suivi par sondage si on la trouve là.
-async function ensureTheaterFollowsIframeIfNeeded() {
-  if (!theaterWebview) return;
-  await new Promise((r) => setTimeout(r, 1200)); // laisse le preload de la frame principale essayer d'abord
-  if (theaterIframeShare) return; // déjà pris en charge
-  const { frames, videos } = await listFramesVideos(theaterWebview);
+// Après navigation du lecteur : si la vidéo attendue n'est pas dans la frame principale
+// (le preload ne l'aura pas trouvée), on cherche dans les iframes et on bascule sur le
+// suivi par sondage si on la trouve là.
+async function ensurePlayerFollowsIframeIfNeeded() {
+  if (!playerWebview) return;
+  await new Promise((r) => setTimeout(r, 1200)); // laisse le preload essayer la frame principale d'abord
+  if (playerIframeShare) return; // déjà pris en charge
+  const { frames, videos } = await listFramesVideos(playerWebview);
   if (videos.length === 0) return;
   const best = videos.reduce((a, b) => (a.width * a.height > b.width * b.height ? a : b));
   const decoded = decodeIframeId(best.id);
   if (!decoded) return;
   const frame = frames[decoded.frameIndex];
   if (!frame) return;
-  theaterIframeShare = { frame, index: decoded.localIndex };
-  theaterLastIframeState = null;
-  if (lastState) applyRemoteToTheaterIframe(lastState.paused, lastState.position);
-  theaterIframePollTimer = setInterval(pollTheaterIframeVideo, 1000);
+  playerIframeShare = { frame, index: decoded.localIndex };
+  playerLastIframeState = null;
+  if (lastState) applyRemoteToPlayerIframe(lastState.paused, lastState.position);
+  playerIframePollTimer = setInterval(pollPlayerIframeVideo, 1000);
 }
 
-function ensureTheaterWindow(): BrowserWindow {
-  if (theaterWindow && !theaterWindow.isDestroyed()) return theaterWindow;
-  theaterWindow = new BrowserWindow({
-    width: 900,
-    height: 620,
-    title: 'Ourmovie — Lecture',
-    webPreferences: { webviewTag: true, contextIsolation: true, nodeIntegration: false },
-  });
-  theaterWindow.loadFile(path.join(__dirname, 'theater', 'index.html'));
-
-  theaterWindow.webContents.on('did-attach-webview', (_event, contents) => {
-    theaterWebview = contents;
-    // Le <webview> vient de s'attacher : s'il y avait une navigation en attente (voir
-    // navigateTheaterTo), c'est le bon moment pour l'appliquer enfin.
-    if (pendingTheaterUrl) {
-      const url = pendingTheaterUrl;
-      pendingTheaterUrl = null;
-      contents.loadURL(url).catch((err) => {
-        pendingTheaterAutoFollow = false;
-        console.error('[ourmovie] loadURL (théâtre, en attente) a échoué', err);
-      });
-    }
-    contents.on('did-finish-load', () => {
-      stopTheaterIframeShare();
-      if (pendingTheaterAutoFollow && lastState) {
-        pendingTheaterAutoFollow = false;
-        contents.send('enable-auto-follow', { paused: lastState.paused, position: lastState.position });
-        void ensureTheaterFollowsIframeIfNeeded();
-      }
-    });
-  });
-
-  theaterWindow.on('closed', () => {
-    theaterWindow = null;
-    theaterWebview = null;
-    stopTheaterIframeShare();
-  });
-
-  return theaterWindow;
-}
-
-function navigateTheaterTo(url: string) {
-  const win = ensureTheaterWindow();
-  win.show();
-  win.focus();
-  pendingTheaterAutoFollow = true;
-  if (theaterWebview) {
-    theaterWebview.loadURL(url).catch((err) => {
-      pendingTheaterAutoFollow = false;
-      console.error('[ourmovie] loadURL (théâtre) a échoué', err);
+function navigatePlayerTo(url: string) {
+  pendingPlayerAutoFollow = true;
+  if (playerWebview) {
+    playerWebview.loadURL(url).catch((err) => {
+      pendingPlayerAutoFollow = false;
+      console.error('[ourmovie] loadURL (lecteur) a échoué', err);
     });
   } else {
-    // Le <webview> n'est pas encore attaché (fenêtre tout juste créée) : on mémorise
-    // l'URL, appliquée dès que 'did-attach-webview' se déclenche (voir plus haut).
-    pendingTheaterUrl = url;
+    pendingPlayerUrl = url;
   }
 }
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1360,
-    height: 860,
+    height: 900,
     webPreferences: {
       preload: path.join(__dirname, 'preload-app.js'),
       contextIsolation: true,
@@ -300,13 +241,36 @@ function createWindow(): void {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
+  const browseSession = session.fromPartition(BROWSE_PARTITION);
+  const playerSession = session.fromPartition(PLAYER_PARTITION);
+
   mainWindow.webContents.on('did-attach-webview', (_event, contents) => {
-    browseWebview = contents;
-    contents.on('did-finish-load', () => {
-      browseMainFrameVideos = [];
-      browseIframeVideos = [];
-      void scanBrowseIframes();
-    });
+    if (contents.session === browseSession) {
+      browseWebview = contents;
+      contents.on('did-finish-load', () => {
+        browseMainFrameVideos = [];
+        browseIframeVideos = [];
+        void scanBrowseIframes();
+      });
+    } else if (contents.session === playerSession) {
+      playerWebview = contents;
+      if (pendingPlayerUrl) {
+        const url = pendingPlayerUrl;
+        pendingPlayerUrl = null;
+        contents.loadURL(url).catch((err) => {
+          pendingPlayerAutoFollow = false;
+          console.error('[ourmovie] loadURL (lecteur, en attente) a échoué', err);
+        });
+      }
+      contents.on('did-finish-load', () => {
+        stopPlayerIframeShare();
+        if (pendingPlayerAutoFollow && lastState) {
+          pendingPlayerAutoFollow = false;
+          contents.send('enable-auto-follow', { paused: lastState.paused, position: lastState.position });
+          void ensurePlayerFollowsIframeIfNeeded();
+        }
+      });
+    }
   });
 
   setInterval(() => void scanBrowseIframes(), 2000);
@@ -326,7 +290,7 @@ ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; ro
   socket?.close();
   knownVideoUrl = null;
   lastState = null;
-  stopTheaterIframeShare();
+  stopPlayerIframeShare();
 
   socket = io(payload.serverUrl, { auth: { token: payload.token } });
 
@@ -338,15 +302,15 @@ ipcMain.on('join-room', (_event, payload: { serverUrl: string; token: string; ro
     mainWindow.webContents.send('sync-state', state);
 
     if (state.videoUrl && state.videoUrl !== knownVideoUrl) {
-      // Nouvelle source (la nôtre ou celle de quelqu'un d'autre) : c'est la fenêtre
-      // théâtre qui navigue dessus, jamais la fenêtre navigation — pour que chercher la
+      // Nouvelle source (la nôtre ou celle de quelqu'un d'autre) : c'est le lecteur qui
+      // navigue dessus, jamais la fenêtre de navigation — pour que chercher la
       // prochaine vidéo n'interrompe jamais la lecture en cours.
       knownVideoUrl = state.videoUrl;
-      navigateTheaterTo(state.videoUrl);
-    } else if (theaterIframeShare) {
-      applyRemoteToTheaterIframe(state.paused, state.position);
+      navigatePlayerTo(state.videoUrl);
+    } else if (playerIframeShare) {
+      applyRemoteToPlayerIframe(state.paused, state.position);
     } else {
-      theaterWebview?.send('apply-remote-playback', { paused: state.paused, position: state.position });
+      playerWebview?.send('apply-remote-playback', { paused: state.paused, position: state.position });
     }
   });
 
@@ -362,41 +326,47 @@ ipcMain.on('leave-room', () => {
   socket = null;
   lastState = null;
   knownVideoUrl = null;
-  stopTheaterIframeShare();
-  theaterWindow?.close();
+  stopPlayerIframeShare();
 });
 
 ipcMain.on('send-chat', (_event, text: string) => {
   socket?.emit('chat', { message: text });
 });
 
-// Interaction locale avec une vidéo synchronisée — vient normalement de la fenêtre
-// théâtre (frame principale), mais on accepte aussi la fenêtre navigation si
-// l'utilisateur interagit encore avec sa propre copie juste après l'avoir partagée.
+// Interaction locale avec une vidéo synchronisée (frame principale du lecteur).
 ipcMain.on('local-video-event', (_event, payload: { type: 'play' | 'pause' | 'seek'; position: number }) => {
   if (!socket) return;
   socket.emit(payload.type, { position: payload.position });
 });
 
-// Vidéo choisie (frame principale) devenue source du salon — depuis le preload de
-// n'importe laquelle des deux fenêtres.
+// Fin naturelle d'une vidéo synchronisée : le serveur enchaîne avec la playlist s'il y a
+// quelque chose en attente.
+ipcMain.on('local-video-ended', () => {
+  socket?.emit('video-ended');
+});
+
+// Vidéo choisie (frame principale) devenue source du salon — depuis le preload du
+// lecteur (suivi auto) ou juste après un "play-now" ci-dessous.
 ipcMain.on('local-video-source', (_event, url: string) => setSource(url));
 
 ipcMain.on('videos-detected', (event, videos: DetectedVideo[]) => {
-  // Seule la fenêtre navigation affiche la liste "vidéos détectées" avec boutons —
-  // ignorer si ça vient de la fenêtre théâtre (pas d'UI de partage là-bas).
   if (event.sender !== browseWebview) return;
   browseMainFrameVideos = videos;
   sendDetectedVideos();
 });
 
-ipcMain.on('share-video', (_event, videoId: number) => {
+// "▶ Maintenant" : remplace tout de suite la source du salon.
+ipcMain.on('play-now', (_event, videoId: number) => {
   if (videoId >= IFRAME_ID_BASE) {
-    shareBrowseIframeVideo(videoId);
+    if (browseWebview) setSource(browseWebview.getURL());
   } else {
-    // Déclenche l'attache côté preload, qui renverra lui-même 'local-video-source'
-    // (→ setSource) une fois la vidéo effectivement attachée — pas besoin de dupliquer
-    // l'appel ici.
     browseWebview?.send('share-video', videoId);
+    // Le preload renverra lui-même 'local-video-source' une fois attaché.
   }
+});
+
+// "+ File d'attente" : ajoute la page courante à la playlist, sans rien interrompre.
+ipcMain.on('queue-video', (_event, _videoId: number) => {
+  if (!socket || !browseWebview) return;
+  socket.emit('queue-video', { url: browseWebview.getURL() });
 });

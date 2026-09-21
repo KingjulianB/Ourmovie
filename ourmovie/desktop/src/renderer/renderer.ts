@@ -18,6 +18,7 @@ interface RoomState {
   paused: boolean;
   position: number;
   participants: string[];
+  queue: string[];
 }
 
 interface DetectedVideo {
@@ -34,7 +35,8 @@ interface OurmovieBridge {
   onSyncState(callback: (state: RoomState) => void): void;
   onChatReceived(callback: (message: ChatMessage) => void): void;
   onSyncError(callback: (message: string) => void): void;
-  shareVideo(videoId: number): void;
+  playNow(videoId: number): void;
+  queueVideo(videoId: number): void;
   onVideosDetected(callback: (videos: DetectedVideo[]) => void): void;
 }
 
@@ -85,7 +87,7 @@ async function apiFetch(path: string, options: RequestInit = {}) {
 
 // --- Barre d'adresse / navigateur intégré ---
 
-const webview = document.getElementById('browser-view') as Electron.WebviewTag;
+const browseView = document.getElementById('browse-view') as Electron.WebviewTag;
 const addressBar = document.getElementById('address-bar') as HTMLInputElement;
 
 function normalizeUrl(input: string): string {
@@ -97,16 +99,16 @@ function normalizeUrl(input: string): string {
 
 document.getElementById('nav-form')!.addEventListener('submit', (e) => {
   e.preventDefault();
-  webview.src = normalizeUrl(addressBar.value);
+  browseView.src = normalizeUrl(addressBar.value);
 });
-document.getElementById('nav-back')!.addEventListener('click', () => webview.goBack());
-document.getElementById('nav-forward')!.addEventListener('click', () => webview.goForward());
-document.getElementById('nav-reload')!.addEventListener('click', () => webview.reload());
-webview.addEventListener('did-navigate', () => {
-  addressBar.value = webview.getURL();
+document.getElementById('nav-back')!.addEventListener('click', () => browseView.goBack());
+document.getElementById('nav-forward')!.addEventListener('click', () => browseView.goForward());
+document.getElementById('nav-reload')!.addEventListener('click', () => browseView.reload());
+browseView.addEventListener('did-navigate', () => {
+  addressBar.value = browseView.getURL();
 });
-webview.addEventListener('did-navigate-in-page', () => {
-  addressBar.value = webview.getURL();
+browseView.addEventListener('did-navigate-in-page', () => {
+  addressBar.value = browseView.getURL();
 });
 
 // --- Auth / lobby / salon ---
@@ -249,12 +251,48 @@ function renderDetectedVideos(videos: DetectedVideo[]) {
     row.className = 'detected-video-row';
     const label = document.createElement('span');
     label.textContent = `${v.width}×${v.height}${formatDuration(v.duration)}`;
-    const button = document.createElement('button');
-    button.textContent = 'Partager sur le salon';
-    button.addEventListener('click', () => window.ourmovie.shareVideo(v.id));
-    row.append(label, button);
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const playNowBtn = document.createElement('button');
+    playNowBtn.textContent = '▶ Maintenant';
+    playNowBtn.title = 'Remplace tout de suite la vidéo en cours pour tout le salon';
+    playNowBtn.addEventListener('click', () => window.ourmovie.playNow(v.id));
+
+    const queueBtn = document.createElement('button');
+    queueBtn.textContent = '+ File';
+    queueBtn.title = "Ajoute à la file d'attente, sans interrompre la vidéo en cours";
+    queueBtn.addEventListener('click', () => window.ourmovie.queueVideo(v.id));
+
+    actions.append(playNowBtn, queueBtn);
+    row.append(label, actions);
     container.appendChild(row);
   }
+}
+
+function shortenUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
+function renderQueue(queue: string[]) {
+  const container = document.getElementById('queue-list') as HTMLElement;
+  container.innerHTML = '';
+  if (queue.length === 0) {
+    container.textContent = 'Vide.';
+    return;
+  }
+  queue.forEach((url, i) => {
+    const row = document.createElement('div');
+    row.className = 'queue-row';
+    row.textContent = `${i + 1}. ${shortenUrl(url)}`;
+    container.appendChild(row);
+  });
 }
 
 window.ourmovie.onChatReceived(appendChatMessage);
@@ -262,6 +300,7 @@ window.ourmovie.onVideosDetected(renderDetectedVideos);
 window.ourmovie.onSyncState((state) => {
   (document.getElementById('room-participants') as HTMLElement).textContent =
     state.participants.join(', ');
+  renderQueue(state.queue ?? []);
 });
 window.ourmovie.onSyncError((message) => {
   setError('lobby-error', message || 'Erreur de synchronisation');

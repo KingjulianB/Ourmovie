@@ -6,78 +6,91 @@
   <link rel="stylesheet" href="renderer.css" />
 </head>
 <body>
-  <div id="toolbar">
-    <button id="nav-back" title="Précédent">←</button>
-    <button id="nav-forward" title="Suivant">→</button>
-    <button id="nav-reload" title="Recharger">⟳</button>
-    <form id="nav-form">
-      <input id="address-bar" placeholder="Aller à... (ex: netflix.com)" />
-    </form>
+  <div id="left">
+    <div id="toolbar">
+      <button id="nav-back" title="Précédent">←</button>
+      <button id="nav-forward" title="Suivant">→</button>
+      <button id="nav-reload" title="Recharger">⟳</button>
+      <form id="nav-form">
+        <input id="address-bar" placeholder="Aller à... (ex: netflix.com)" />
+      </form>
+    </div>
+
+    <webview
+      id="browse-view"
+      src="https://www.google.com"
+      partition="persist:ourmovie-browse"
+      preload="../preload-webview.js"
+    ></webview>
+
+    <div id="player-header">Lecture synchronisée</div>
+    <webview id="player-view" src="about:blank" partition="persist:ourmovie-player" preload="../preload-webview.js"></webview>
   </div>
 
-  <div id="main">
-    <webview id="browser-view" src="https://www.google.com" preload="../preload-webview.js"></webview>
+  <aside id="sidebar">
+    <header><h1>Ourmovie</h1></header>
 
-    <aside id="sidebar">
-      <header><h1>Ourmovie</h1></header>
+    <section id="setup-view">
+      <h2>Serveur</h2>
+      <p class="hint">Adresse directe de ton add-on (pas l'Ingress HA) — ex: <code>http://192.168.x.x:38099</code>.</p>
+      <form id="setup-form">
+        <input name="serverUrl" placeholder="http://192.168.1.50:38099" required />
+        <button type="submit">Continuer</button>
+      </form>
+    </section>
 
-      <section id="setup-view">
-        <h2>Serveur</h2>
-        <p class="hint">Adresse directe de ton add-on (pas l'Ingress HA) — ex: <code>http://192.168.x.x:38099</code>.</p>
-        <form id="setup-form">
-          <input name="serverUrl" placeholder="http://192.168.1.50:38099" required />
-          <button type="submit">Continuer</button>
-        </form>
-      </section>
+    <section id="auth-view" hidden>
+      <h2>Connexion</h2>
+      <form id="login-form" method="post">
+        <input name="username" placeholder="Nom d'utilisateur" required />
+        <input name="password" type="password" placeholder="Mot de passe" required />
+        <button type="submit">Se connecter</button>
+      </form>
+      <h2>Créer un compte</h2>
+      <form id="register-form" method="post">
+        <input name="username" placeholder="Nom d'utilisateur" required />
+        <input name="password" type="password" placeholder="Mot de passe (8+ caractères)" required minlength="8" />
+        <button type="submit">Créer un compte</button>
+      </form>
+      <p id="auth-error" class="error" hidden></p>
+    </section>
 
-      <section id="auth-view" hidden>
-        <h2>Connexion</h2>
-        <form id="login-form" method="post">
-          <input name="username" placeholder="Nom d'utilisateur" required />
-          <input name="password" type="password" placeholder="Mot de passe" required />
-          <button type="submit">Se connecter</button>
-        </form>
-        <h2>Créer un compte</h2>
-        <form id="register-form" method="post">
-          <input name="username" placeholder="Nom d'utilisateur" required />
-          <input name="password" type="password" placeholder="Mot de passe (8+ caractères)" required minlength="8" />
-          <button type="submit">Créer un compte</button>
-        </form>
-        <p id="auth-error" class="error" hidden></p>
-      </section>
+    <section id="lobby-view" hidden>
+      <div class="room-header">
+        <h2>Salon</h2>
+        <button id="logout">Se déconnecter</button>
+      </div>
+      <form id="create-room-form">
+        <p class="hint">Navigue d'abord vers la vidéo à regarder, puis crée le salon.</p>
+        <button type="submit">Créer un salon pour cet onglet</button>
+      </form>
+      <form id="join-room-form">
+        <input name="code" placeholder="Code du salon" required />
+        <button type="submit">Rejoindre</button>
+      </form>
+      <p id="lobby-error" class="error" hidden></p>
+    </section>
 
-      <section id="lobby-view" hidden>
-        <div class="room-header">
-          <h2>Salon</h2>
-          <button id="logout">Se déconnecter</button>
-        </div>
-        <form id="create-room-form">
-          <p class="hint">Navigue d'abord vers la vidéo à regarder, puis crée le salon.</p>
-          <button type="submit">Créer un salon pour cet onglet</button>
-        </form>
-        <form id="join-room-form">
-          <input name="code" placeholder="Code du salon" required />
-          <button type="submit">Rejoindre</button>
-        </form>
-        <p id="lobby-error" class="error" hidden></p>
-      </section>
+    <section id="room-view" hidden>
+      <div class="room-header">
+        <h2>Salon <span id="room-code"></span></h2>
+        <button id="leave-room">Quitter</button>
+      </div>
+      <p id="room-participants" class="hint"></p>
 
-      <section id="room-view" hidden>
-        <div class="room-header">
-          <h2>Salon <span id="room-code"></span></h2>
-          <button id="leave-room">Quitter</button>
-        </div>
-        <p id="room-participants" class="hint"></p>
-        <h3>Vidéos détectées sur cette page</h3>
-        <div id="detected-videos" class="hint">Aucune vidéo détectée sur cette page.</div>
-        <div id="chat-messages"></div>
-        <form id="chat-form">
-          <input id="chat-input" placeholder="Message..." autocomplete="off" />
-          <button type="submit">Envoyer</button>
-        </form>
-      </section>
-    </aside>
-  </div>
+      <h3>Vidéos détectées sur cette page</h3>
+      <div id="detected-videos" class="hint">Aucune vidéo détectée sur cette page.</div>
+
+      <h3>File d'attente</h3>
+      <div id="queue-list" class="hint">Vide.</div>
+
+      <div id="chat-messages"></div>
+      <form id="chat-form">
+        <input id="chat-input" placeholder="Message..." autocomplete="off" />
+        <button type="submit">Envoyer</button>
+      </form>
+    </section>
+  </aside>
 
   <script src="renderer.js"></script>
 </body>

@@ -17,7 +17,8 @@ contextBridge.exposeInMainWorld('ourmovie', {
   onSyncError: (callback: (message: string) => void) => {
     ipcRenderer.on('sync-error', (_event, message) => callback(message));
   },
-  shareVideo: (videoId: number) => ipcRenderer.send('share-video', videoId),
+  playNow: (videoId: number) => ipcRenderer.send('play-now', videoId),
+  queueVideo: (videoId: number) => ipcRenderer.send('queue-video', videoId),
   onVideosDetected: (callback: (videos: unknown) => void) => {
     ipcRenderer.on('videos-detected', (_event, videos) => callback(videos));
   },

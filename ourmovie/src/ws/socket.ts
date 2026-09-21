@@ -14,10 +14,20 @@ interface RoomRow {
   paused: number;
   position: number;
   updated_at: string;
+  queue: string;
 }
 
 function loadRoom(code: string): RoomRow | undefined {
   return db.prepare('SELECT * FROM rooms WHERE code = ?').get(code) as RoomRow | undefined;
+}
+
+function parseQueue(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function toState(room: RoomRow, participants: string[]): RoomState {
@@ -41,6 +51,7 @@ function toState(room: RoomRow, participants: string[]): RoomState {
     paused: Boolean(room.paused),
     position,
     participants,
+    queue: parseQueue(room.queue),
   };
 }
 
@@ -129,6 +140,40 @@ export function attachSocketServer(httpServer: HttpServer): Server {
       db.prepare(
         `UPDATE rooms SET video_url = ?, position = 0, paused = 1, updated_at = datetime('now') WHERE code = ?`
       ).run(url, currentRoomCode);
+      broadcastState(io, currentRoomCode);
+    });
+
+    // "+ File d'attente" : ajoute une vidéo à la playlist du salon sans interrompre la
+    // lecture en cours (contrairement à set-source, qui remplace tout de suite).
+    socket.on('queue-video', ({ url }: { url: string }) => {
+      if (!currentRoomCode || !url) return;
+      const room = loadRoom(currentRoomCode);
+      if (!room) return;
+      const queue = parseQueue(room.queue);
+      if (queue.includes(url) || room.video_url === url) return; // déjà en cours ou en attente
+      queue.push(url);
+      db.prepare(`UPDATE rooms SET queue = ?, updated_at = datetime('now') WHERE code = ?`).run(
+        JSON.stringify(queue),
+        currentRoomCode
+      );
+      broadcastState(io, currentRoomCode);
+    });
+
+    // La vidéo en cours d'un participant est arrivée à sa fin naturelle : on enchaîne
+    // avec le premier élément de la playlist, s'il y en a un.
+    socket.on('video-ended', () => {
+      if (!currentRoomCode) return;
+      const room = loadRoom(currentRoomCode);
+      if (!room) return;
+      const queue = parseQueue(room.queue);
+      const next = queue.shift();
+      if (!next) {
+        db.prepare(`UPDATE rooms SET paused = 1, updated_at = datetime('now') WHERE code = ?`).run(currentRoomCode);
+      } else {
+        db.prepare(
+          `UPDATE rooms SET video_url = ?, position = 0, paused = 1, queue = ?, updated_at = datetime('now') WHERE code = ?`
+        ).run(next, JSON.stringify(queue), currentRoomCode);
+      }
       broadcastState(io, currentRoomCode);
     });
 
